@@ -38,7 +38,7 @@ deactivate () {
 # unset irrelevant variables
 deactivate nondestructive
 
-VIRTUAL_ENV="C:\Users\bilyh\Documents\Codebase-World\local-rag-mvp\.venv"
+VIRTUAL_ENV="E:\hobbies\local-rag-mvp\.venv"
 export VIRTUAL_ENV
 
 _OLD_VIRTUAL_PATH="$PATH"
