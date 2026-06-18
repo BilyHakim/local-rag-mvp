@@ -12,6 +12,8 @@ class Settings(BaseSettings):
     
     QDRANT_URL: str = "http://localhost:6333"
     QDRANT_COLLECTION: str = "local_knowledge"
+    
+    RAG_SCORE_THRESHOLD: float = 0.45
 
     model_config = SettingsConfigDict(
         env_file=".env",

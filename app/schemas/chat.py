@@ -16,3 +16,20 @@ class EmbeddingTestRequest(BaseModel):
 class EmbeddingTestResponse(BaseModel):
     dimension: int
     sample: list[float] 
+    
+
+class ChatRagRequest(BaseModel):
+    question: str = Field(..., min_length=2)
+    top_k: int = Field(default=5, ge=1, le=20)
+
+
+class ChatRagSource(BaseModel):
+    id: str
+    score: float
+    text: str
+    source_name: str | None = None
+
+
+class ChatRagResponse(BaseModel):
+    answer: str
+    sources: list[ChatRagSource]
