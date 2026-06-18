@@ -6,9 +6,12 @@ class Settings(BaseSettings):
     APP_HOST: str = "0.0.0.0"
     APP_PORT: int = 8000
     
-    OLLAMA_BASE_URL: str = "http://localhost:1143"
+    OLLAMA_BASE_URL: str = "http://localhost:11434"
     OLLAMA_CHAT_MODEL: str = "qwen2.5:3b"
     OLLAMA_EMBEDDING_MODEL: str = "nomic-embed-text"
+    
+    QDRANT_URL: str = "http://localhost:6333"
+    QDRANT_COLLECTION: str = "local_knowledge"
 
     model_config = SettingsConfigDict(
         env_file=".env",
