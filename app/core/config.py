@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     
     OLLAMA_BASE_URL: str = "http://localhost:1143"
     OLLAMA_CHAT_MODEL: str = "qwen2.5:3b"
+    OLLAMA_EMBEDDING_MODEL: str = "nomic-embed-text"
 
     model_config = SettingsConfigDict(
         env_file=".env",
