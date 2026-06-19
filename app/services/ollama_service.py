@@ -16,6 +16,9 @@ class OllamaService:
             "model": self.chat_model,
             "prompt": prompt,
             "stream": False,
+            "options": {
+                "temperature": 0
+            }
         }
 
         async with httpx.AsyncClient(timeout=300) as client:
@@ -24,6 +27,34 @@ class OllamaService:
 
         data = response.json()
         return data["response"]
+
+    async def chat(self, system_prompt: str, user_prompt: str) -> str:
+        url = f"{self.base_url}/api/chat"
+
+        payload = {
+            "model": self.chat_model,
+            "stream": False,
+            "messages": [
+                {
+                    "role": "system",
+                    "content": system_prompt
+                },
+                {
+                    "role": "user",
+                    "content": user_prompt
+                }
+            ],
+            "options": {
+                "temperature": 0
+            }
+        }
+
+        async with httpx.AsyncClient(timeout=300) as client:
+            response = await client.post(url, json=payload)
+            response.raise_for_status()
+
+        data = response.json()
+        return data["message"]["content"]
 
     async def embed(self, text: str) -> list[float]:
         url = f"{self.base_url}/api/embed"

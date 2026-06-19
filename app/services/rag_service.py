@@ -3,23 +3,30 @@ from app.services.ollama_service import ollama_service
 from app.services.qdrant_service import qdrant_service
 
 
+FALLBACK_ANSWER = "Maaf, informasi tersebut belum tersedia di knowledge base."
+
+
 SYSTEM_PROMPT = """
 Anda adalah chatbot product knowledge internal perusahaan.
 
-Aturan wajib:
-1. Jawab hanya berdasarkan CONTEXT yang diberikan.
-2. Jangan menggunakan pengetahuan umum model jika tidak ada di CONTEXT.
-3. Jika jawaban tidak ditemukan di CONTEXT, jawab:
-   "Maaf, informasi tersebut belum tersedia di knowledge base."
-4. Jangan mengarang fitur, prosedur, nama menu, atau konfigurasi.
-5. Jawab dalam bahasa Indonesia yang jelas dan teknis.
+ATURAN UTAMA:
+- Anda hanya boleh menjawab berdasarkan CONTEXT yang diberikan.
+- Jangan gunakan pengetahuan umum di luar CONTEXT.
+- Jangan menambahkan saran, asumsi, opini, atau referensi eksternal.
+- Jangan menyebut "panduan pabrikan", "dokumen lain", atau "informasi tambahan" jika tidak ada di CONTEXT.
+- Jika CONTEXT berisi jawaban yang relevan, jawab langsung berdasarkan CONTEXT.
+- Jika CONTEXT tidak berisi jawaban yang relevan, jawab PERSIS:
+  "Maaf, informasi tersebut belum tersedia di knowledge base."
+
+ATURAN FORMAT:
+- Jawab singkat, jelas, dan teknis.
+- Jangan awali jawaban dengan kata "Namun".
+- Jangan gabungkan fallback dengan jawaban.
+- Jangan tulis fallback jika Anda menemukan informasi relevan di CONTEXT.
 """.strip()
 
 
 def build_context_text(search_results: list[dict]) -> str:
-    if not search_results:
-        return ""
-
     context_blocks = []
 
     for index, item in enumerate(search_results, start=1):
@@ -41,20 +48,36 @@ content:
 def build_rag_prompt(question: str, search_results: list[dict]) -> str:
     context_text = build_context_text(search_results)
 
-    prompt = f"""
+    return f"""
 CONTEXT:
 {context_text}
 
 QUESTION:
 {question}
 
-INSTRUCTION:
-Jawab pertanyaan user hanya berdasarkan CONTEXT.
-Jika CONTEXT tidak memiliki informasi yang cukup untuk menjawab, jawab:
-"Maaf, informasi tersebut belum tersedia di knowledge base."
+TUGAS:
+Jawab QUESTION hanya menggunakan informasi dari CONTEXT.
+
+Jika jawaban ada di CONTEXT:
+- Jawab langsung.
+- Jangan gunakan kalimat fallback.
+- Jangan tambahkan informasi di luar CONTEXT.
+
+Jika jawaban tidak ada di CONTEXT:
+- Jawab persis:
+{FALLBACK_ANSWER}
 """.strip()
 
-    return prompt
+
+def clean_answer(answer: str) -> str:
+    answer = answer.strip()
+
+    # Guard sederhana untuk mencegah pola:
+    # "Maaf ... Namun, <jawaban>"
+    if answer.startswith(FALLBACK_ANSWER) and len(answer) > len(FALLBACK_ANSWER):
+        return FALLBACK_ANSWER
+
+    return answer
 
 
 async def answer_with_rag(question: str, top_k: int = 5) -> dict:
@@ -72,18 +95,21 @@ async def answer_with_rag(question: str, top_k: int = 5) -> dict:
 
     if not filtered_results:
         return {
-            "answer": "Maaf, informasi tersebut belum tersedia di knowledge base.",
+            "answer": FALLBACK_ANSWER,
             "sources": search_results,
         }
 
-    prompt = build_rag_prompt(
+    user_prompt = build_rag_prompt(
         question=question,
         search_results=filtered_results,
     )
 
-    answer = await ollama_service.generate(
-        prompt=f"{SYSTEM_PROMPT}\n\n{prompt}"
+    answer = await ollama_service.chat(
+        system_prompt=SYSTEM_PROMPT,
+        user_prompt=user_prompt,
     )
+
+    answer = clean_answer(answer)
 
     return {
         "answer": answer,
