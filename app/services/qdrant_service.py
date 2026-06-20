@@ -16,17 +16,6 @@ class QdrantService:
         collection_names = [collection.name for collection in collections]
 
         if self.collection_name in collection_names:
-            collection = self.client.get_collection(self.collection_name)
-            configured_vectors = collection.config.params.vectors
-            configured_size = getattr(configured_vectors, "size", None)
-
-            if configured_size is not None and configured_size != vector_size:
-                raise RuntimeError(
-                    f"Ukuran vector collection '{self.collection_name}' adalah "
-                    f"{configured_size}, tetapi embedding menghasilkan {vector_size}. "
-                    "Gunakan collection baru atau recreate collection Qdrant."
-                )
-
             return
 
         self.client.create_collection(
@@ -42,10 +31,19 @@ class QdrantService:
         vector: list[float],
         text: str,
         source_name: str | None = None,
+        metadata: dict | None = None,
     ) -> str:
         self.ensure_collection(vector_size=len(vector))
 
         point_id = str(uuid4())
+
+        payload = {
+            "text": text,
+            "source_name": source_name,
+        }
+
+        if metadata:
+            payload.update(metadata)
 
         self.client.upsert(
             collection_name=self.collection_name,
@@ -53,10 +51,7 @@ class QdrantService:
                 PointStruct(
                     id=point_id,
                     vector=vector,
-                    payload={
-                        "text": text,
-                        "source_name": source_name,
-                    },
+                    payload=payload,
                 )
             ],
         )
@@ -87,6 +82,10 @@ class QdrantService:
                 "score": result.score,
                 "text": payload.get("text", ""),
                 "source_name": payload.get("source_name"),
+                "source_type": payload.get("source_type"),
+                "filename": payload.get("filename"),
+                "page_number": payload.get("page_number"),
+                "chunk_index": payload.get("chunk_index"),
             })
 
         return items

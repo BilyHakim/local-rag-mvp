@@ -15,8 +15,8 @@ class EmbeddingTestRequest(BaseModel):
 
 class EmbeddingTestResponse(BaseModel):
     dimension: int
-    sample: list[float] 
-    
+    sample: list[float]
+
 
 class ChatRagRequest(BaseModel):
     question: str = Field(..., min_length=2)
@@ -28,6 +28,10 @@ class ChatRagSource(BaseModel):
     score: float
     text: str
     source_name: str | None = None
+    source_type: str | None = None
+    filename: str | None = None
+    page_number: int | None = None
+    chunk_index: int | None = None
 
 
 class ChatRagResponse(BaseModel):

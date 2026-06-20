@@ -26,16 +26,40 @@ ATURAN FORMAT:
 """.strip()
 
 
+# def build_context_text(search_results: list[dict]) -> str:
+#     context_blocks = []
+
+#     for index, item in enumerate(search_results, start=1):
+#         source_name = item.get("source_name") or "unknown_source"
+#         text = item.get("text") or ""
+
+#         block = f"""
+# [SOURCE {index}]
+# source_name: {source_name}
+# content:
+# {text}
+# """.strip()
+
+#         context_blocks.append(block)
+
+#     return "\n\n".join(context_blocks)
+
 def build_context_text(search_results: list[dict]) -> str:
     context_blocks = []
 
     for index, item in enumerate(search_results, start=1):
         source_name = item.get("source_name") or "unknown_source"
+        source_type = item.get("source_type") or "manual"
+        filename = item.get("filename") or "-"
+        page_number = item.get("page_number") or "-"
         text = item.get("text") or ""
 
         block = f"""
 [SOURCE {index}]
 source_name: {source_name}
+source_type: {source_type}
+filename: {filename}
+page_number: {page_number}
 content:
 {text}
 """.strip()

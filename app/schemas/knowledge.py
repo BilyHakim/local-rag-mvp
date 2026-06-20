@@ -23,6 +23,10 @@ class KnowledgeSearchItem(BaseModel):
     score: float
     text: str
     source_name: str | None = None
+    source_type: str | None = None
+    filename: str | None = None
+    page_number: int | None = None
+    chunk_index: int | None = None
 
 
 class KnowledgeSearchResponse(BaseModel):

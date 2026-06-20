@@ -14,6 +14,10 @@ class Settings(BaseSettings):
     QDRANT_COLLECTION: str = "local_knowledge"
     
     RAG_SCORE_THRESHOLD: float = 0.45
+    
+    STORAGE_DIR: str = "storage"
+    CHUNK_SIZE: int = 900
+    CHUNK_OVERLAP: int = 150
 
     model_config = SettingsConfigDict(
         env_file=".env",
