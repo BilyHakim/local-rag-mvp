@@ -18,6 +18,12 @@ class Settings(BaseSettings):
     STORAGE_DIR: str = "storage"
     CHUNK_SIZE: int = 900
     CHUNK_OVERLAP: int = 150
+    
+    OCR_ENABLED: bool = True
+    OCR_LANG: str = "eng+ind"
+    OCR_DPI: int = 200
+    OCR_MIN_TEXT_LENGTH: int = 20
+    TESSERACT_CMD: str | None = None
 
     model_config = SettingsConfigDict(
         env_file=".env",

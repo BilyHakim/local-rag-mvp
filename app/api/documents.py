@@ -46,6 +46,7 @@ async def upload_document(file: UploadFile = File(...)):
         for page in pages:
             page_number = page["page_number"]
             page_text = page["text"]
+            extraction_method = page["extraction_method"]
 
             chunks = chunk_text(page_text)
             total_chunks += len(chunks)
@@ -58,11 +59,12 @@ async def upload_document(file: UploadFile = File(...)):
                     text=chunk,
                     source_name=file.filename,
                     metadata={
-                        "source_type": "pdf",
+                        "source_type": f"pdf_{extraction_method}",
                         "filename": file.filename,
                         "saved_path": str(saved_path),
                         "page_number": page_number,
                         "chunk_index": chunk_index,
+                        "extraction_method": extraction_method,
                     }
                 )
 
