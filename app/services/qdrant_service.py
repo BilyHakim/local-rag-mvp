@@ -86,6 +86,9 @@ class QdrantService:
                 "filename": payload.get("filename"),
                 "page_number": payload.get("page_number"),
                 "chunk_index": payload.get("chunk_index"),
+                "file_format": payload.get("file_format"),
+                "sheet_name": payload.get("sheet_name"),
+                "row_number": payload.get("row_number"),
             })
 
         return items

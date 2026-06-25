@@ -68,6 +68,7 @@ async def upload_document(file: UploadFile = File(...)):
             page_text = page["text"]
             extraction_method = page["extraction_method"]
             sheet_name = page.get("sheet_name")
+            row_number = page.get("row_number")
 
             chunks = chunk_text(page_text)
             total_chunks += len(chunks)
@@ -88,6 +89,7 @@ async def upload_document(file: UploadFile = File(...)):
                         "file_format": source_format,
                         "extraction_method": extraction_method,
                         "sheet_name": sheet_name,
+                        "row_number": row_number,
                     }
                 )
 

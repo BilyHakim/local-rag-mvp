@@ -32,6 +32,9 @@ class ChatRagSource(BaseModel):
     filename: str | None = None
     page_number: int | None = None
     chunk_index: int | None = None
+    file_format: str | None = None
+    sheet_name: str | None = None
+    row_number: int | None = None
 
 
 class ChatRagResponse(BaseModel):
