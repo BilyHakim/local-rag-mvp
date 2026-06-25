@@ -10,11 +10,12 @@ from app.services.docx_service import extract_docx_pages
 from app.services.ollama_service import ollama_service
 from app.services.pdf_service import extract_pdf_pages
 from app.services.qdrant_service import qdrant_service
+from app.services.spreadsheet_service import extract_spreadsheet_pages
 
 
 router = APIRouter()
 
-SUPPORTED_EXTENSIONS = {".pdf", ".docx"}
+SUPPORTED_EXTENSIONS = {".pdf", ".docx", ".xlsx", ".xls", ".csv"}
 
 
 def _extract_document_pages(saved_path: Path, extension: str) -> list[dict]:
@@ -23,6 +24,9 @@ def _extract_document_pages(saved_path: Path, extension: str) -> list[dict]:
 
     if extension == ".docx":
         return extract_docx_pages(saved_path)
+
+    if extension in {".xlsx", ".xls", ".csv"}:
+        return extract_spreadsheet_pages(saved_path, extension)
 
     raise ValueError(f"Ekstensi file tidak didukung: {extension}")
 
@@ -40,7 +44,7 @@ async def upload_document(file: UploadFile = File(...)):
     if extension not in SUPPORTED_EXTENSIONS:
         raise HTTPException(
             status_code=400,
-            detail="MVP ini baru support file PDF dan DOCX."
+            detail="MVP ini support file PDF, DOCX, XLSX, XLS, dan CSV."
         )
 
     documents_dir = Path(settings.STORAGE_DIR) / "documents"
@@ -63,6 +67,7 @@ async def upload_document(file: UploadFile = File(...)):
             page_number = page["page_number"]
             page_text = page["text"]
             extraction_method = page["extraction_method"]
+            sheet_name = page.get("sheet_name")
 
             chunks = chunk_text(page_text)
             total_chunks += len(chunks)
@@ -82,6 +87,7 @@ async def upload_document(file: UploadFile = File(...)):
                         "chunk_index": chunk_index,
                         "file_format": source_format,
                         "extraction_method": extraction_method,
+                        "sheet_name": sheet_name,
                     }
                 )
 
