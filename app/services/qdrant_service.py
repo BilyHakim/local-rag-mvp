@@ -32,10 +32,11 @@ class QdrantService:
         text: str,
         source_name: str | None = None,
         metadata: dict | None = None,
+        point_id: str | None = None,
     ) -> str:
         self.ensure_collection(vector_size=len(vector))
 
-        point_id = str(uuid4())
+        resolved_point_id = point_id or str(uuid4())
 
         payload = {
             "text": text,
@@ -49,14 +50,14 @@ class QdrantService:
             collection_name=self.collection_name,
             points=[
                 PointStruct(
-                    id=point_id,
+                    id=resolved_point_id,
                     vector=vector,
                     payload=payload,
                 )
             ],
         )
 
-        return point_id
+        return resolved_point_id
 
     def search(
         self,
@@ -77,21 +78,86 @@ class QdrantService:
         for result in response.points:
             payload = result.payload or {}
 
-            items.append({
-                "id": str(result.id),
-                "score": result.score,
-                "text": payload.get("text", ""),
-                "source_name": payload.get("source_name"),
-                "source_type": payload.get("source_type"),
-                "filename": payload.get("filename"),
-                "page_number": payload.get("page_number"),
-                "chunk_index": payload.get("chunk_index"),
-                "file_format": payload.get("file_format"),
-                "sheet_name": payload.get("sheet_name"),
-                "row_number": payload.get("row_number"),
-            })
+            items.append(self._payload_to_item(
+                result.id,
+                payload,
+                result.score,
+            ))
 
         return items
+
+    def _payload_to_item(self, point_id: object, payload: dict, score: float) -> dict:
+        return {
+            "id": str(point_id),
+            "score": score,
+            "text": payload.get("text", ""),
+            "source_name": payload.get("source_name"),
+            "source_type": payload.get("source_type"),
+            "filename": payload.get("filename"),
+            "page_number": payload.get("page_number"),
+            "chunk_index": payload.get("chunk_index"),
+            "file_format": payload.get("file_format"),
+            "sheet_name": payload.get("sheet_name"),
+            "row_number": payload.get("row_number"),
+            "database": payload.get("database"),
+            "schema_name": payload.get("schema_name"),
+            "table_name": payload.get("table_name"),
+            "row_key": payload.get("row_key"),
+        }
+
+    def search_by_required_tokens(
+        self,
+        required_tokens: list[str],
+        *,
+        limit: int = 20,
+    ) -> list[dict]:
+        if not required_tokens:
+            return []
+
+        collection_names = [
+            collection.name
+            for collection in self.client.get_collections().collections
+        ]
+
+        if self.collection_name not in collection_names:
+            return []
+
+        required_lower = [token.lower() for token in required_tokens]
+        matched: list[dict] = []
+        offset = None
+
+        while len(matched) < limit:
+            records, offset = self.client.scroll(
+                collection_name=self.collection_name,
+                limit=256,
+                offset=offset,
+                with_payload=True,
+                with_vectors=False,
+            )
+
+            if not records:
+                break
+
+            for record in records:
+                payload = record.payload or {}
+                searchable = " ".join([
+                    payload.get("text") or "",
+                    payload.get("source_name") or "",
+                    payload.get("table_name") or "",
+                ]).lower()
+
+                if all(token in searchable for token in required_lower):
+                    matched.append(
+                        self._payload_to_item(record.id, payload, score=0.99)
+                    )
+
+                    if len(matched) >= limit:
+                        break
+
+            if offset is None:
+                break
+
+        return matched
 
 
 qdrant_service = QdrantService()

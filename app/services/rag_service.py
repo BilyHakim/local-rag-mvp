@@ -8,6 +8,13 @@ from app.services.text_cleanup_service import strip_answer_ocr_noise
 
 FALLBACK_ANSWER = "Maaf, informasi tersebut belum tersedia di knowledge base."
 
+ENTITY_CODE_PATTERN = re.compile(r"\b[A-Z]{1,6}\d{1,8}\b", re.IGNORECASE)
+
+QUESTION_REPLACEMENTS = (
+    (re.compile(r"modbus_adress", re.IGNORECASE), "modbus_address"),
+    (re.compile(r"modbus adres", re.IGNORECASE), "modbus_address"),
+)
+
 CONTEXT_DUMP_MARKERS = (
     "source_name:",
     "source_type:",
@@ -50,7 +57,8 @@ ATURAN FORMAT:
 - Jangan awali jawaban dengan kata "Namun".
 - Jangan gabungkan fallback dengan jawaban.
 - Abaikan noise OCR (mis. "me PS 3") — jangan sertakan di jawaban.
-- Untuk data tabel/spreadsheet, gunakan baris yang paling cocok dengan pertanyaan.
+- Untuk data tabel/spreadsheet/database, gunakan baris yang paling cocok dengan pertanyaan.
+- Jika satu sensor/entity punya beberapa parameter (mis. flowrate_mass, temperature), sebutkan modbus_address per parameter yang relevan.
 """.strip()
 
 
@@ -58,22 +66,33 @@ def build_context_text(search_results: list[dict]) -> str:
     context_blocks = []
 
     for index, item in enumerate(search_results, start=1):
-        filename = item.get("filename") or item.get("source_name") or "unknown"
-        page_number = item.get("page_number")
-        sheet_name = item.get("sheet_name")
-        row_number = item.get("row_number")
         text = item.get("text") or ""
+        table_name = item.get("table_name")
+        database = item.get("database")
+        row_key = item.get("row_key")
+        location_parts = []
 
-        location_parts = [filename]
+        if table_name:
+            location_parts.append(f"{database or 'postgres'}.{table_name}")
 
-        if page_number not in (None, "-"):
-            location_parts.append(f"hal. {page_number}")
+            if row_key not in (None, "-"):
+                location_parts.append(f"row {row_key}")
+        else:
+            filename = item.get("filename") or item.get("source_name") or "unknown"
+            page_number = item.get("page_number")
+            sheet_name = item.get("sheet_name")
+            row_number = item.get("row_number")
 
-        if sheet_name not in (None, "-"):
-            location_parts.append(f"sheet {sheet_name}")
+            location_parts.append(filename)
 
-        if row_number not in (None, "-"):
-            location_parts.append(f"baris {row_number}")
+            if page_number not in (None, "-"):
+                location_parts.append(f"hal. {page_number}")
+
+            if sheet_name not in (None, "-"):
+                location_parts.append(f"sheet {sheet_name}")
+
+            if row_number not in (None, "-"):
+                location_parts.append(f"baris {row_number}")
 
         location = ", ".join(location_parts)
 
@@ -97,9 +116,30 @@ TUGAS:
 Jawab QUESTION hanya dari CONTEXT. Tulis jawaban natural 1-4 kalimat.
 Jangan salin teks CONTEXT mentah. Jangan tulis metadata atau label sumber.
 
+Untuk data database/postgres dengan kolom sensor_id, parameter_name, modbus_address:
+- Cari baris yang sensor_id-nya cocok dengan pertanyaan.
+- Sebutkan nilai modbus_address dari baris tersebut.
+- Jika ada beberapa parameter untuk sensor yang sama, sebutkan semua atau yang paling relevan.
+
 Jika jawaban tidak ada di CONTEXT, jawab persis:
 {FALLBACK_ANSWER}
 """.strip()
+
+
+def normalize_question(question: str) -> str:
+    normalized = question
+
+    for pattern, replacement in QUESTION_REPLACEMENTS:
+        normalized = pattern.sub(replacement, normalized)
+
+    return normalized
+
+
+def _extract_entity_codes(text: str) -> set[str]:
+    return {
+        match.group(0).upper()
+        for match in ENTITY_CODE_PATTERN.finditer(text)
+    }
 
 
 def _tokenize(text: str) -> set[str]:
@@ -120,13 +160,39 @@ def _collect_searchable_text(item: dict) -> str:
         item.get("text") or "",
         item.get("source_name") or "",
         item.get("filename") or "",
+        item.get("table_name") or "",
+        item.get("database") or "",
+        item.get("row_key") or "",
     ]
     return " ".join(parts)
 
 
-def rerank_results(question: str, search_results: list[dict]) -> list[dict]:
+def _merge_search_results(*result_lists: list[dict]) -> list[dict]:
+    merged: list[dict] = []
+    seen_ids: set[str] = set()
+
+    for results in result_lists:
+        for item in results:
+            item_id = item["id"]
+
+            if item_id in seen_ids:
+                continue
+
+            seen_ids.add(item_id)
+            merged.append(item)
+
+    return merged
+
+
+def rerank_results(
+    question: str,
+    search_results: list[dict],
+    *,
+    entity_codes: set[str] | None = None,
+) -> list[dict]:
     question_tokens = _tokenize(question)
     question_text = " ".join(question.lower().split())
+    entity_codes = entity_codes or _extract_entity_codes(question)
 
     def score(item: dict) -> tuple[float, float]:
         searchable_text = _collect_searchable_text(item)
@@ -150,12 +216,34 @@ def rerank_results(question: str, search_results: list[dict]) -> list[dict]:
 
         filename_bonus = len(filename_overlap) * 0.25
 
+        entity_bonus = 0.0
+        matched_entities = 0
+
+        for code in entity_codes:
+            if code.lower() in normalized_text:
+                entity_bonus += 0.55
+                matched_entities += 1
+
+        if entity_codes and matched_entities == len(entity_codes):
+            entity_bonus += 0.25
+
+        postgres_bonus = 0.0
+        if item.get("source_type") == "postgres" and matched_entities > 0:
+            postgres_bonus = 0.15
+
+        modbus_bonus = 0.0
+        if "modbus" in question_tokens and "modbus_address" in normalized_text:
+            modbus_bonus = 0.2
+
         return (
             item["score"]
             + overlap_score
             + phrase_bonus
             + name_bonus
-            + filename_bonus,
+            + filename_bonus
+            + entity_bonus
+            + postgres_bonus
+            + modbus_bonus,
             item["score"],
         )
 
@@ -196,18 +284,26 @@ def is_answer_grounded(answer: str, search_results: list[dict]) -> bool:
     if answer == FALLBACK_ANSWER:
         return True
 
+    answer_body = answer.strip()
     context_text = " ".join(
         _collect_searchable_text(item) for item in search_results
     ).lower()
     context_tokens = _tokenize(context_text)
 
-    answer_tokens = _tokenize(answer)
+    answer_tokens = _tokenize(answer_body)
     significant_tokens = {token for token in answer_tokens if len(token) >= 4}
 
     if not significant_tokens:
         significant_tokens = answer_tokens
 
     if not significant_tokens:
+        numeric_tokens = [
+            token for token in re.findall(r"\d+", answer_body) if len(token) >= 2
+        ]
+
+        if numeric_tokens:
+            return all(token in context_text for token in numeric_tokens)
+
         return True
 
     grounded_count = sum(
@@ -253,35 +349,51 @@ async def _generate_answer(
 
 
 async def answer_with_rag(question: str, top_k: int = 5) -> dict:
-    query_vector = await ollama_service.embed(question)
-    fetch_k = max(top_k * 3, 15)
+    normalized_question = normalize_question(question)
+    entity_codes = _extract_entity_codes(normalized_question)
+    query_vector = await ollama_service.embed(normalized_question)
+    fetch_k = max(top_k * 5, 50) if entity_codes else max(top_k * 3, 15)
 
-    search_results = qdrant_service.search(
+    vector_results = qdrant_service.search(
         query_vector=query_vector,
         top_k=fetch_k,
     )
 
+    keyword_results: list[dict] = []
+    if entity_codes:
+        keyword_results = qdrant_service.search_by_required_tokens(
+            sorted(entity_codes),
+            limit=max(top_k * 3, 20),
+        )
+
+    search_results = _merge_search_results(keyword_results, vector_results)
+
     filtered_results = [
         item for item in search_results
         if item["score"] >= settings.RAG_SCORE_THRESHOLD
+        or any(code.lower() in _collect_searchable_text(item).lower() for code in entity_codes)
     ]
-    filtered_results = rerank_results(question, filtered_results)[:top_k]
+    filtered_results = rerank_results(
+        normalized_question,
+        filtered_results,
+        entity_codes=entity_codes,
+    )[:top_k]
 
     if not filtered_results:
         return {
             "answer": FALLBACK_ANSWER,
-            "sources": search_results,
+            "sources": search_results[:top_k],
         }
 
     answer = await _generate_answer(
-        question=question,
+        question=normalized_question,
         search_results=filtered_results,
     )
     answer = clean_answer(answer)
 
     if is_context_dump(answer):
         answer = await _generate_answer(
-            question=question,
+            question=normalized_question,
             search_results=filtered_results,
             strict=True,
         )

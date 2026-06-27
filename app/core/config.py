@@ -25,6 +25,14 @@ class Settings(BaseSettings):
     OCR_MIN_TEXT_LENGTH: int = 20
     TESSERACT_CMD: str | None = None
 
+    POSTGRES_ENABLED: bool = False
+    POSTGRES_HOST: str = "localhost"
+    POSTGRES_PORT: int = 5432
+    POSTGRES_DB: str = "seamon-local-ipc-db"
+    POSTGRES_USER: str = "postgres"
+    POSTGRES_PASSWORD: str = ""
+    POSTGRES_SCHEMA: str = "public"
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8"

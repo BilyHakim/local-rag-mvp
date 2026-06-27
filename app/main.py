@@ -4,6 +4,7 @@ from app.api.health import router as health_router
 from app.api.chat import router as chat_router
 from app.api.knowledge import router as knowledge_router
 from app.api.documents import router as documents_router
+from app.api.postgres import router as postgres_router
 from app.core.config import settings
 
 
@@ -34,4 +35,10 @@ app.include_router(
     documents_router,
     prefix="/api",
     tags=["documents"]
+)
+
+app.include_router(
+    postgres_router,
+    prefix="/api",
+    tags=["postgres"]
 )

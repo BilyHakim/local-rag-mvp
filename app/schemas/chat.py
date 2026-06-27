@@ -35,6 +35,10 @@ class ChatRagSource(BaseModel):
     file_format: str | None = None
     sheet_name: str | None = None
     row_number: int | None = None
+    database: str | None = None
+    schema_name: str | None = None
+    table_name: str | None = None
+    row_key: str | None = None
 
 
 class ChatRagResponse(BaseModel):
