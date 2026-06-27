@@ -4,6 +4,7 @@ from io import BytesIO
 import fitz
 
 from app.core.config import settings
+from app.services.text_cleanup_service import clean_ocr_text
 
 
 def _ocr_pdf_page(page: fitz.Page) -> str:
@@ -51,7 +52,7 @@ def extract_pdf_pages(file_path: Path) -> list[dict]:
                 settings.OCR_ENABLED
                 and len(text) < settings.OCR_MIN_TEXT_LENGTH
             ):
-                text = _ocr_pdf_page(page)
+                text = clean_ocr_text(_ocr_pdf_page(page))
                 extraction_method = "ocr"
 
             if text:

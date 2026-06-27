@@ -3,9 +3,33 @@ import re
 from app.core.config import settings
 from app.services.ollama_service import ollama_service
 from app.services.qdrant_service import qdrant_service
+from app.services.text_cleanup_service import strip_answer_ocr_noise
 
 
 FALLBACK_ANSWER = "Maaf, informasi tersebut belum tersedia di knowledge base."
+
+CONTEXT_DUMP_MARKERS = (
+    "source_name:",
+    "source_type:",
+    "page_number:",
+    "sheet_name:",
+    "row_number:",
+    "content:",
+    "filename:",
+)
+
+RETRY_SYSTEM_PROMPT = """
+Anda menjawab pertanyaan internal perusahaan hanya dari CONTEXT.
+
+ATURAN KETAT:
+- Jawab dalam 1-4 kalimat bahasa Indonesia yang natural.
+- DILARANG menyalin teks CONTEXT mentah.
+- DILARANG menulis metadata, label sumber, atau format blok CONTEXT.
+- DILARANG menulis "source_name", "content", "page_number", atau "[SOURCE N]".
+- Rangkum saja informasi relevan dengan kalimat sendiri.
+- Jika CONTEXT tidak cukup, jawab persis:
+  "Maaf, informasi tersebut belum tersedia di knowledge base."
+""".strip()
 
 
 SYSTEM_PROMPT = """
@@ -15,63 +39,45 @@ ATURAN UTAMA:
 - Anda hanya boleh menjawab berdasarkan CONTEXT yang diberikan.
 - Jangan gunakan pengetahuan umum di luar CONTEXT.
 - Jangan menambahkan saran, asumsi, opini, atau referensi eksternal.
-- Jangan menyebut "panduan pabrikan", "dokumen lain", atau "informasi tambahan" jika tidak ada di CONTEXT.
-- Jika CONTEXT berisi jawaban yang relevan, jawab langsung berdasarkan CONTEXT.
+- Jika CONTEXT berisi jawaban yang relevan, rangkum dengan kalimat sendiri.
 - Jika CONTEXT tidak berisi jawaban yang relevan, jawab PERSIS:
   "Maaf, informasi tersebut belum tersedia di knowledge base."
 
 ATURAN FORMAT:
-- Jawab singkat, jelas, dan teknis.
+- Jawab 1-4 kalimat singkat, jelas, dan natural — bukan copy-paste CONTEXT.
+- DILARANG menyalin blok CONTEXT, metadata, atau label sumber.
+- DILARANG menulis "source_name", "content", "page_number", atau "[SOURCE N]".
 - Jangan awali jawaban dengan kata "Namun".
 - Jangan gabungkan fallback dengan jawaban.
-- Jangan tulis fallback jika Anda menemukan informasi relevan di CONTEXT.
+- Abaikan noise OCR (mis. "me PS 3") — jangan sertakan di jawaban.
 - Untuk data tabel/spreadsheet, gunakan baris yang paling cocok dengan pertanyaan.
-- Jika baris berisi beberapa angka, jelaskan angka yang dipilih berdasarkan label kolom yang tersedia.
 """.strip()
 
-
-# def build_context_text(search_results: list[dict]) -> str:
-#     context_blocks = []
-
-#     for index, item in enumerate(search_results, start=1):
-#         source_name = item.get("source_name") or "unknown_source"
-#         text = item.get("text") or ""
-
-#         block = f"""
-# [SOURCE {index}]
-# source_name: {source_name}
-# content:
-# {text}
-# """.strip()
-
-#         context_blocks.append(block)
-
-#     return "\n\n".join(context_blocks)
 
 def build_context_text(search_results: list[dict]) -> str:
     context_blocks = []
 
     for index, item in enumerate(search_results, start=1):
-        source_name = item.get("source_name") or "unknown_source"
-        source_type = item.get("source_type") or "manual"
-        filename = item.get("filename") or "-"
-        page_number = item.get("page_number") or "-"
-        sheet_name = item.get("sheet_name") or "-"
-        row_number = item.get("row_number") or "-"
+        filename = item.get("filename") or item.get("source_name") or "unknown"
+        page_number = item.get("page_number")
+        sheet_name = item.get("sheet_name")
+        row_number = item.get("row_number")
         text = item.get("text") or ""
 
-        block = f"""
-[SOURCE {index}]
-source_name: {source_name}
-source_type: {source_type}
-filename: {filename}
-page_number: {page_number}
-sheet_name: {sheet_name}
-row_number: {row_number}
-content:
-{text}
-""".strip()
+        location_parts = [filename]
 
+        if page_number not in (None, "-"):
+            location_parts.append(f"hal. {page_number}")
+
+        if sheet_name not in (None, "-"):
+            location_parts.append(f"sheet {sheet_name}")
+
+        if row_number not in (None, "-"):
+            location_parts.append(f"baris {row_number}")
+
+        location = ", ".join(location_parts)
+
+        block = f"[Sumber {index} — {location}]\n{text}".strip()
         context_blocks.append(block)
 
     return "\n\n".join(context_blocks)
@@ -88,17 +94,10 @@ QUESTION:
 {question}
 
 TUGAS:
-Jawab QUESTION hanya menggunakan informasi dari CONTEXT.
+Jawab QUESTION hanya dari CONTEXT. Tulis jawaban natural 1-4 kalimat.
+Jangan salin teks CONTEXT mentah. Jangan tulis metadata atau label sumber.
 
-Jika jawaban ada di CONTEXT:
-- Jawab langsung.
-- Jangan gunakan kalimat fallback.
-- Jangan tambahkan informasi di luar CONTEXT.
-- Untuk pertanyaan "berapa", cari angka pada baris/konteks yang memuat istilah yang ditanyakan.
-- Jika konteks tabel tidak memiliki nama kolom, sebutkan nilai yang paling mungkin dan sertakan baris sumbernya.
-
-Jika jawaban tidak ada di CONTEXT:
-- Jawab persis:
+Jika jawaban tidak ada di CONTEXT, jawab persis:
 {FALLBACK_ANSWER}
 """.strip()
 
@@ -111,34 +110,146 @@ def _tokenize(text: str) -> set[str]:
     }
 
 
+def _filename_tokens(item: dict) -> set[str]:
+    filename = (item.get("filename") or item.get("source_name") or "").lower()
+    return _tokenize(filename)
+
+
+def _collect_searchable_text(item: dict) -> str:
+    parts = [
+        item.get("text") or "",
+        item.get("source_name") or "",
+        item.get("filename") or "",
+    ]
+    return " ".join(parts)
+
+
 def rerank_results(question: str, search_results: list[dict]) -> list[dict]:
     question_tokens = _tokenize(question)
     question_text = " ".join(question.lower().split())
 
     def score(item: dict) -> tuple[float, float]:
-        text = item.get("text") or ""
-        normalized_text = " ".join(text.lower().split())
-        text_tokens = _tokenize(text)
-        overlap = len(question_tokens & text_tokens)
-        phrase_bonus = 1 if question_text and question_text in normalized_text else 0
+        searchable_text = _collect_searchable_text(item)
+        normalized_text = " ".join(searchable_text.lower().split())
+        text_tokens = _tokenize(searchable_text)
+        overlap_tokens = question_tokens & text_tokens
+        filename_overlap = question_tokens & _filename_tokens(item)
+
+        overlap_score = len(overlap_tokens) * 0.08
+
+        for token in overlap_tokens:
+            if len(token) >= 4:
+                overlap_score += 0.05
+
+        phrase_bonus = 0.15 if question_text and question_text in normalized_text else 0
+
+        name_bonus = 0.0
+        for token in question_tokens:
+            if len(token) >= 4 and token in normalized_text:
+                name_bonus += 0.12
+
+        filename_bonus = len(filename_overlap) * 0.25
 
         return (
-            item["score"] + (overlap * 0.03) + (phrase_bonus * 0.1),
+            item["score"]
+            + overlap_score
+            + phrase_bonus
+            + name_bonus
+            + filename_bonus,
             item["score"],
         )
 
     return sorted(search_results, key=score, reverse=True)
 
 
+def is_context_dump(answer: str) -> bool:
+    lower = answer.lower()
+    marker_hits = sum(1 for marker in CONTEXT_DUMP_MARKERS if marker in lower)
+
+    if marker_hits >= 2:
+        return True
+
+    return bool(re.search(r"\[source\s+\d+\]", lower)) and "content:" in lower
+
+
+def repair_context_dump(answer: str) -> str | None:
+    match = re.search(r"content:\s*", answer, flags=re.IGNORECASE)
+
+    if not match:
+        return None
+
+    extracted = answer[match.end():].strip()
+
+    if len(extracted) < 20:
+        return None
+
+    sentences = re.split(r"(?<=[.!?])\s+", extracted)
+    summary = " ".join(sentences[:2]).strip()
+
+    if len(summary) < 20:
+        return None
+
+    return summary
+
+
+def is_answer_grounded(answer: str, search_results: list[dict]) -> bool:
+    if answer == FALLBACK_ANSWER:
+        return True
+
+    context_text = " ".join(
+        _collect_searchable_text(item) for item in search_results
+    ).lower()
+    context_tokens = _tokenize(context_text)
+
+    answer_tokens = _tokenize(answer)
+    significant_tokens = {token for token in answer_tokens if len(token) >= 4}
+
+    if not significant_tokens:
+        significant_tokens = answer_tokens
+
+    if not significant_tokens:
+        return True
+
+    grounded_count = sum(
+        1 for token in significant_tokens if token in context_tokens
+    )
+
+    if len(significant_tokens) <= 5:
+        return grounded_count == len(significant_tokens)
+
+    return (grounded_count / len(significant_tokens)) >= 0.5
+
+
 def clean_answer(answer: str) -> str:
     answer = answer.strip()
+    answer = strip_answer_ocr_noise(answer)
 
-    # Guard sederhana untuk mencegah pola:
-    # "Maaf ... Namun, <jawaban>"
     if answer.startswith(FALLBACK_ANSWER) and len(answer) > len(FALLBACK_ANSWER):
         return FALLBACK_ANSWER
 
+    if is_context_dump(answer):
+        repaired = repair_context_dump(answer)
+        if repaired:
+            return repaired
+
     return answer
+
+
+async def _generate_answer(
+    question: str,
+    search_results: list[dict],
+    *,
+    strict: bool = False,
+) -> str:
+    user_prompt = build_rag_prompt(
+        question=question,
+        search_results=search_results,
+    )
+
+    return await ollama_service.chat(
+        system_prompt=RETRY_SYSTEM_PROMPT if strict else SYSTEM_PROMPT,
+        user_prompt=user_prompt,
+    )
 
 
 async def answer_with_rag(question: str, top_k: int = 5) -> dict:
@@ -162,17 +273,31 @@ async def answer_with_rag(question: str, top_k: int = 5) -> dict:
             "sources": search_results,
         }
 
-    user_prompt = build_rag_prompt(
+    answer = await _generate_answer(
         question=question,
         search_results=filtered_results,
     )
-
-    answer = await ollama_service.chat(
-        system_prompt=SYSTEM_PROMPT,
-        user_prompt=user_prompt,
-    )
-
     answer = clean_answer(answer)
+
+    if is_context_dump(answer):
+        answer = await _generate_answer(
+            question=question,
+            search_results=filtered_results,
+            strict=True,
+        )
+        answer = clean_answer(answer)
+
+    if is_context_dump(answer):
+        return {
+            "answer": FALLBACK_ANSWER,
+            "sources": filtered_results,
+        }
+
+    if not is_answer_grounded(answer, filtered_results):
+        return {
+            "answer": FALLBACK_ANSWER,
+            "sources": filtered_results,
+        }
 
     return {
         "answer": answer,
