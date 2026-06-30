@@ -55,4 +55,4 @@ def strip_answer_ocr_noise(answer: str) -> str:
     cleaned = answer.strip()
     cleaned = _OCR_GARBAGE_PREFIX.sub("", cleaned)
     cleaned = _OCR_INLINE_GARBAGE.sub("", cleaned)
-    return cleaned.strip(" ,.;")
+    return cleaned.lstrip(" ,;").strip()

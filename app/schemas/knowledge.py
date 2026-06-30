@@ -10,7 +10,10 @@ class KnowledgeCreateResponse(BaseModel):
     id: str
     text: str
     source_name: str | None = None
-    vector_dimension: int
+    vector_dimension: int | None = None
+    content_hash: str | None = None
+    skipped_duplicate: bool = False
+    message: str | None = None
 
 
 class KnowledgeSearchRequest(BaseModel):

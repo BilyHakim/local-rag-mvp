@@ -7,3 +7,6 @@ class DocumentUploadResponse(BaseModel):
     total_pages: int
     total_chunks: int
     indexed_chunks: int
+    content_hash: str | None = None
+    skipped_duplicate: bool = False
+    message: str | None = None

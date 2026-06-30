@@ -1,7 +1,15 @@
 from uuid import uuid4
 
 from qdrant_client import QdrantClient
-from qdrant_client.models import Distance, PointStruct, VectorParams
+from qdrant_client.models import (
+    Distance,
+    FieldCondition,
+    Filter,
+    FilterSelector,
+    MatchValue,
+    PointStruct,
+    VectorParams,
+)
 
 from app.core.config import settings
 
@@ -11,11 +19,74 @@ class QdrantService:
         self.client = QdrantClient(url=settings.QDRANT_URL)
         self.collection_name = settings.QDRANT_COLLECTION
 
-    def ensure_collection(self, vector_size: int) -> None:
-        collections = self.client.get_collections().collections
-        collection_names = [collection.name for collection in collections]
+    def _collection_exists(self) -> bool:
+        collection_names = [
+            collection.name
+            for collection in self.client.get_collections().collections
+        ]
+        return self.collection_name in collection_names
 
-        if self.collection_name in collection_names:
+    def _scroll_one_by_filter(self, payload_filter: Filter) -> dict | None:
+        if not self._collection_exists():
+            return None
+
+        records, _ = self.client.scroll(
+            collection_name=self.collection_name,
+            scroll_filter=payload_filter,
+            limit=1,
+            with_payload=True,
+            with_vectors=False,
+        )
+
+        if not records:
+            return None
+
+        record = records[0]
+        payload = record.payload or {}
+        return self._payload_to_item(record.id, payload, score=1.0)
+
+    def exists_by_content_hash(self, content_hash: str) -> bool:
+        payload_filter = Filter(
+            must=[
+                FieldCondition(
+                    key="content_hash",
+                    match=MatchValue(value=content_hash),
+                )
+            ]
+        )
+        return self._scroll_one_by_filter(payload_filter) is not None
+
+    def get_sample_by_content_hash(self, content_hash: str) -> dict | None:
+        payload_filter = Filter(
+            must=[
+                FieldCondition(
+                    key="content_hash",
+                    match=MatchValue(value=content_hash),
+                )
+            ]
+        )
+        return self._scroll_one_by_filter(payload_filter)
+
+    def delete_by_filename(self, filename: str) -> None:
+        if not self._collection_exists():
+            return
+
+        self.client.delete(
+            collection_name=self.collection_name,
+            points_selector=FilterSelector(
+                filter=Filter(
+                    must=[
+                        FieldCondition(
+                            key="filename",
+                            match=MatchValue(value=filename),
+                        )
+                    ]
+                )
+            ),
+        )
+
+    def ensure_collection(self, vector_size: int) -> None:
+        if self._collection_exists():
             return
 
         self.client.create_collection(
@@ -103,6 +174,8 @@ class QdrantService:
             "schema_name": payload.get("schema_name"),
             "table_name": payload.get("table_name"),
             "row_key": payload.get("row_key"),
+            "content_hash": payload.get("content_hash"),
+            "saved_path": payload.get("saved_path"),
         }
 
     def search_by_required_tokens(
@@ -114,12 +187,7 @@ class QdrantService:
         if not required_tokens:
             return []
 
-        collection_names = [
-            collection.name
-            for collection in self.client.get_collections().collections
-        ]
-
-        if self.collection_name not in collection_names:
+        if not self._collection_exists():
             return []
 
         required_lower = [token.lower() for token in required_tokens]
