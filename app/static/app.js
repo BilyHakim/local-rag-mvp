@@ -53,7 +53,24 @@ function updateSidebarButtons(hidden) {
     toggle.setAttribute('title', title);
     toggle.innerHTML = `<svg class="sidebar-toggle-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M9 3v18${direction}"/></svg>`;
   });
+  const collapse = qs('#sidebarCollapse');
+  if (collapse) {
+    collapse.setAttribute('aria-label', hidden ? 'Perluas menu samping' : 'Ciutkan menu samping');
+    collapse.setAttribute('title', hidden ? 'Perluas sidebar' : 'Ciutkan sidebar');
+    collapse.setAttribute('aria-expanded', String(!hidden));
+  }
 }
+
+qs('#sidebarCollapse').addEventListener('click', () => {
+  if (window.matchMedia('(max-width: 760px)').matches) {
+    sidebar.classList.remove('open');
+    updateSidebarButtons(true);
+    return;
+  }
+  const hidden = appShell.classList.toggle('sidebar-hidden');
+  localStorage.setItem('rag-sidebar-hidden', String(hidden));
+  updateSidebarButtons(hidden);
+});
 
 qsa('.mobile-menu, [data-mobile-menu]').forEach(button => button.addEventListener('click', () => {
   if (window.matchMedia('(max-width: 760px)').matches) {
