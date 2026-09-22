@@ -28,8 +28,21 @@ class OllamaService:
         data = response.json()
         return data["response"]
 
-    async def chat(self, system_prompt: str, user_prompt: str) -> str:
+    async def chat(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        *,
+        max_tokens: int | None = None,
+    ) -> str:
         url = f"{self.base_url}/api/chat"
+
+        options = {
+            "temperature": 0,
+        }
+
+        if max_tokens is not None:
+            options["num_predict"] = max_tokens
 
         payload = {
             "model": self.chat_model,
@@ -44,9 +57,7 @@ class OllamaService:
                     "content": user_prompt
                 }
             ],
-            "options": {
-                "temperature": 0
-            }
+            "options": options,
         }
 
         async with httpx.AsyncClient(timeout=300) as client:
