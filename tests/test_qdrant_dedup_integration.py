@@ -31,7 +31,24 @@ def isolated_qdrant_service(monkeypatch):
     service = QdrantService()
     yield service
     if service._collection_exists():
-        service.client.delete_collection(collection_name)
+        service.client.delete_collection(service.collection_name)
+
+
+async def test_remote_atomic_replacement(isolated_qdrant_service, monkeypatch, tmp_path):
+    from unittest.mock import AsyncMock
+    from app.core.config import settings
+    from app.services import ingestion_service, index_manifest
+    service = isolated_qdrant_service
+    monkeypatch.setattr(settings, "STORAGE_DIR", str(tmp_path))
+    monkeypatch.setattr(settings, "EMBED_BATCH_SIZE", 1)
+    monkeypatch.setattr(ingestion_service, "qdrant_service", service)
+    monkeypatch.setattr(ingestion_service.ollama_service, "embed_many", AsyncMock(return_value=[[1.] * 8]))
+    await ingestion_service.ingest("doc", [{"text": "old remote"}])
+    monkeypatch.setattr(ingestion_service.ollama_service, "embed_many", AsyncMock(side_effect=[[[1.] * 8], RuntimeError("failed")]))
+    with pytest.raises(RuntimeError):
+        await ingestion_service.ingest("doc", [{"text": "partial remote"}, {"text": "last"}])
+    assert [x["text"] for x in service.search([1.] * 8)] == ["old remote"]
+    assert index_manifest.lexical("partial", 5) == []
 
 
 def test_exists_by_content_hash_and_delete_by_filename(isolated_qdrant_service):

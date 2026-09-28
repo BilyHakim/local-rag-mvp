@@ -1,12 +1,16 @@
 import csv
 from pathlib import Path
 from typing import Iterable, Sequence
+from itertools import islice
+from app.core.config import settings
 
 import xlrd
 from openpyxl import load_workbook
 
 
 def _clean_cell(value: object) -> str:
+    if value is None:
+        return ""
     return str(value).strip()
 
 
@@ -90,7 +94,7 @@ def _build_record_pages(
 
     first_row = compact_rows[first_row_index]
     has_header = _looks_like_header(first_row)
-    headers = first_row if has_header else _default_headers(len(first_row))
+    headers = [(_clean_cell(value) or f"Kolom {i + 1}") for i, value in enumerate(raw_rows[first_row_index])] if has_header else _default_headers(len(raw_rows[first_row_index]))
     data_start_index = first_row_index + 1 if has_header else first_row_index
 
     pages = []
@@ -129,7 +133,9 @@ def _extract_xlsx_pages(file_path: Path) -> list[dict]:
 
     try:
         for sheet_index, worksheet in enumerate(workbook.worksheets, start=1):
-            rows = list(worksheet.iter_rows(values_only=True))
+            rows = list(islice(worksheet.iter_rows(values_only=True), settings.MAX_CHUNKS + 2))
+            if len(rows) > settings.MAX_CHUNKS + 1:
+                raise ValueError("Spreadsheet row limit exceeded")
             pages.extend(_build_record_pages(
                 raw_rows=rows,
                 sheet_index=sheet_index,
@@ -144,7 +150,9 @@ def _extract_xlsx_pages(file_path: Path) -> list[dict]:
 def _extract_csv_pages(file_path: Path) -> list[dict]:
     with file_path.open("r", encoding="utf-8-sig", newline="") as csv_file:
         reader = csv.reader(csv_file)
-        rows = list(reader)
+        rows = list(islice(reader, settings.MAX_CHUNKS + 2))
+        if len(rows) > settings.MAX_CHUNKS + 1:
+            raise ValueError("CSV row limit exceeded")
 
     return _build_record_pages(
         raw_rows=rows,
@@ -160,6 +168,8 @@ def _extract_xls_pages(file_path: Path) -> list[dict]:
 
     for sheet_index in range(workbook.nsheets):
         worksheet = workbook.sheet_by_index(sheet_index)
+        if worksheet.nrows > settings.MAX_CHUNKS + 1:
+            raise ValueError("Spreadsheet row limit exceeded")
         rows = [
             worksheet.row_values(row_index)
             for row_index in range(worksheet.nrows)

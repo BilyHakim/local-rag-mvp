@@ -29,6 +29,7 @@ def _ocr_pdf_page(page: fitz.Page) -> str:
         text = pytesseract.image_to_string(
             image,
             lang=settings.OCR_LANG,
+            timeout=30,
         )
     except pytesseract.TesseractNotFoundError as exc:
         raise RuntimeError(
@@ -44,6 +45,8 @@ def extract_pdf_pages(file_path: Path) -> list[dict]:
     pages = []
 
     try:
+        if len(document) > settings.MAX_CHUNKS:
+            raise ValueError("PDF page limit exceeded")
         for index, page in enumerate(document):
             text = (page.get_text("text") or "").strip()
             extraction_method = "text"

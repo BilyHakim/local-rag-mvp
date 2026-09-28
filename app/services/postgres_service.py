@@ -7,8 +7,7 @@ import asyncpg
 from app.core.config import settings
 from app.schemas.postgres import PostgresConnectionOverride
 from app.services.chunking_service import chunk_text
-from app.services.ollama_service import ollama_service
-from app.services.qdrant_service import qdrant_service
+from app.services.ingestion_service import ingest
 
 
 POSTGRES_POINT_NAMESPACE = uuid.UUID("8f4b2f1a-6c3d-4e9b-a1f0-2d8e7c6b5a49")
@@ -29,6 +28,8 @@ class PostgresConnectionParams:
 def resolve_connection(
     override: PostgresConnectionOverride | None = None,
 ) -> PostgresConnectionParams:
+    if settings.APP_ENV != "local" and override is not None:
+        raise ValueError("Connection override disabled outside local mode")
     return PostgresConnectionParams(
         host=(override.host if override and override.host else settings.POSTGRES_HOST),
         port=(override.port if override and override.port else settings.POSTGRES_PORT),
@@ -69,6 +70,8 @@ async def _connect(params: PostgresConnectionParams) -> asyncpg.Connection:
         database=params.database,
         user=params.user,
         password=params.password,
+        timeout=10,
+        command_timeout=60,
     )
 
 
@@ -172,7 +175,7 @@ async def list_tables(
                 ON c.relname = t.table_name
                 AND c.relnamespace = n.oid
             WHERE t.table_schema = $1
-              AND t.table_type = 'BASE TABLE'
+              AND t.table_type IN ('BASE TABLE', 'VIEW')
             ORDER BY t.table_name
             """,
             schema_name,
@@ -189,6 +192,7 @@ async def list_tables(
                 "row_estimate": int(row["row_estimate"] or 0),
             }
             for row in rows
+            if settings.APP_ENV == "local" or row["table_name"] in settings.POSTGRES_ALLOWED_TABLES
         ],
     }
 
@@ -249,6 +253,12 @@ async def sync_tables(
 ) -> dict:
     params = resolve_connection(override)
     schema_name = _validate_identifier(params.schema_name, "Schema")
+    for table in tables:
+        _validate_identifier(table, "Table")
+        if settings.APP_ENV != "local" and table not in settings.POSTGRES_ALLOWED_TABLES:
+            raise ValueError("Table not allowed for indexing")
+    if limit_per_table is not None:
+        raise ValueError("Partial table sync disabled: full snapshot required")
     connection = await _connect(params)
 
     results = []
@@ -266,10 +276,12 @@ async def sync_tables(
                 connection,
                 schema_name=schema_name,
                 table=validated_table,
-                limit=limit_per_table,
+                limit=settings.MAX_CHUNKS + 1,
             )
 
-            indexed_chunks = 0
+            if len(rows) > settings.MAX_CHUNKS:
+                raise ValueError("Table exceeds staging row limit")
+            records = []
 
             for row_index, row in enumerate(rows, start=1):
                 row_key = _build_row_key(
@@ -291,19 +303,9 @@ async def sync_tables(
                 chunks = chunk_text(row_text)
 
                 for chunk_index, chunk in enumerate(chunks):
-                    vector = await ollama_service.embed(chunk)
-                    point_id = _postgres_point_id(
-                        database=params.database,
-                        table=validated_table,
-                        row_key=row_key,
-                        chunk_index=chunk_index,
-                    )
-
-                    qdrant_service.upsert_text(
-                        vector=vector,
-                        text=chunk,
-                        source_name=f"{params.database}.{validated_table}",
-                        metadata={
+                    records.append({
+                            "text": chunk,
+                            "source_name": f"{params.database}.{schema_name}.{validated_table}",
                             "source_type": "postgres",
                             "database": params.database,
                             "schema_name": params.schema_name,
@@ -311,10 +313,9 @@ async def sync_tables(
                             "row_key": row_key,
                             "chunk_index": chunk_index,
                             "file_format": "postgres",
-                        },
-                        point_id=point_id,
-                    )
-                    indexed_chunks += 1
+                        })
+            await ingest(f"postgres:{params.host}:{params.port}:{params.database}:{schema_name}:{validated_table}", records, allow_empty=True)
+            indexed_chunks = len(records)
 
             results.append({
                 "table": validated_table,

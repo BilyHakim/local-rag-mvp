@@ -2,7 +2,7 @@ from pydantic import BaseModel, Field
 
 
 class ChatBasicRequest(BaseModel):
-    message: str = Field(..., min_length=1)
+    message: str = Field(..., min_length=1, max_length=4000)
 
 
 class ChatBasicResponse(BaseModel):
@@ -10,7 +10,7 @@ class ChatBasicResponse(BaseModel):
 
 
 class EmbeddingTestRequest(BaseModel):
-    text: str = Field(..., min_length=1)
+    text: str = Field(..., min_length=1, max_length=12000)
 
 
 class EmbeddingTestResponse(BaseModel):
@@ -19,7 +19,7 @@ class EmbeddingTestResponse(BaseModel):
 
 
 class ChatRagRequest(BaseModel):
-    question: str = Field(..., min_length=2)
+    question: str = Field(..., min_length=2, max_length=4000)
     top_k: int = Field(default=5, ge=1, le=20)
 
 
@@ -41,6 +41,19 @@ class ChatRagSource(BaseModel):
     row_key: str | None = None
 
 
+class Citation(BaseModel):
+    source_id: str
+    evidence_text: str
+    filename: str | None = None
+    page_number: int | None = None
+    sheet_name: str | None = None
+    row_number: int | None = None
+    table_name: str | None = None
+    row_key: str | None = None
+
+
 class ChatRagResponse(BaseModel):
     answer: str
     sources: list[ChatRagSource]
+    citations: list[Citation] = Field(default_factory=list)
+    status: str = "answered"

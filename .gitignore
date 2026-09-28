@@ -13,6 +13,7 @@ ENV/
 .env
 .env.*
 !.env.example
+!.env.staging.example
 
 # FastAPI/Uvicorn runtime files
 *.pid

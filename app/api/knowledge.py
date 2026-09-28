@@ -1,4 +1,7 @@
 from fastapi import APIRouter, HTTPException
+import asyncio
+from app.services.ingestion_service import ingest
+from app.services.chunking_service import chunk_text
 
 from app.schemas.knowledge import (
     KnowledgeCreateRequest,
@@ -6,7 +9,7 @@ from app.schemas.knowledge import (
     KnowledgeSearchRequest,
     KnowledgeSearchResponse,
 )
-from app.services.dedup_service import compute_text_hash, knowledge_point_id
+from app.services.dedup_service import compute_text_hash
 from app.services.ollama_service import ollama_service
 from app.services.qdrant_service import qdrant_service
 
@@ -19,8 +22,8 @@ async def create_knowledge(payload: KnowledgeCreateRequest):
     try:
         content_hash = compute_text_hash(payload.text, payload.source_name)
 
-        if qdrant_service.exists_by_content_hash(content_hash):
-            existing = qdrant_service.get_sample_by_content_hash(content_hash)
+        existing = await asyncio.to_thread(qdrant_service.get_sample_by_content_hash, content_hash)
+        if existing:
 
             return KnowledgeCreateResponse(
                 id=(existing or {}).get("id", ""),
@@ -31,25 +34,17 @@ async def create_knowledge(payload: KnowledgeCreateRequest):
                 message="Knowledge identik sudah ter-index sebelumnya. Upload dilewati.",
             )
 
-        vector = await ollama_service.embed(payload.text)
-        point_id = knowledge_point_id(content_hash)
-
-        qdrant_service.upsert_text(
-            vector=vector,
-            text=payload.text,
-            source_name=payload.source_name,
-            metadata={
-                "source_type": "manual",
-                "content_hash": content_hash,
-            },
-            point_id=point_id,
-        )
+        records = await ingest(f"manual:{content_hash}", [
+            {"text": chunk, "source_name": payload.source_name, "source_type": "manual",
+             "content_hash": content_hash, "chunk_index": i}
+            for i, chunk in enumerate(chunk_text(payload.text))
+        ])
+        point_id = records[0]["id"]
 
         return KnowledgeCreateResponse(
             id=point_id,
             text=payload.text,
             source_name=payload.source_name,
-            vector_dimension=len(vector),
             content_hash=content_hash,
             skipped_duplicate=False,
             message="Knowledge berhasil di-index.",
@@ -67,7 +62,7 @@ async def search_knowledge(payload: KnowledgeSearchRequest):
     try:
         query_vector = await ollama_service.embed(payload.query)
 
-        results = qdrant_service.search(
+        results = await asyncio.to_thread(qdrant_service.search,
             query_vector=query_vector,
             top_k=payload.top_k,
         )

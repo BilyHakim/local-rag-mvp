@@ -1,5 +1,10 @@
 # Local RAG MVP
 
+Panduan staging terbaru: [Self-hosted staging](docs/STAGING.md). Gunakan
+`compose.staging.yml` untuk API key, tenant isolation, ingestion versioned, hybrid
+Qdrant + BM25, metrics, dan acceptance evaluation. Bagian legacy di bawah menjelaskan
+mode lokal awal; alur staging dan batas operasional yang berlaku ada di panduan tersebut.
+
 Aplikasi Retrieval-Augmented Generation (RAG) lokal dengan FastAPI, Ollama, dan Qdrant. Aplikasi menerima knowledge manual, dokumen, spreadsheet, serta data PostgreSQL opsional, lalu menggunakan data tersebut sebagai konteks jawaban.
 
 Dokumentasi ini disusun dari implementasi di repository. Sumber konfigurasi utama adalah `app/core/config.py`, endpoint berada di `app/api`, dan dependency Python dikunci di `requirements.txt`.

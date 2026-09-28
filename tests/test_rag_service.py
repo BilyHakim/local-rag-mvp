@@ -8,6 +8,7 @@ from app.services.rag_service import (
     answer_with_rag,
     build_context_text,
     build_evidence_spans,
+    fallback_evidence_ids,
     build_rag_prompt,
     clean_answer,
     is_answer_grounded,
@@ -110,6 +111,16 @@ def test_is_answer_grounded_rejects_hallucinated_name():
     assert is_answer_grounded("Bily Hakim Erlangga", sources) is False
 
 
+def test_is_answer_grounded_rejects_invented_partnership():
+    sources = [{"text": "KIPAS membantu pengiriman paket melalui kargo udara."}]
+    assert is_answer_grounded("KIPAS bekerja sama dengan mitra kargo udara.", sources) is False
+
+
+def test_is_answer_grounded_accepts_supported_company_abbreviation():
+    sources = [{"text": "Sebagai layanan dari PT. Sumber Cahaya Semesta, KIPAS berfokus pada pengiriman paket harian."}]
+    assert is_answer_grounded("KIPAS adalah layanan dari PT. Sumber Cahaya Semesta.", sources) is True
+
+
 def test_clean_answer_keeps_pure_fallback():
     assert clean_answer(FALLBACK_ANSWER) == FALLBACK_ANSWER
 
@@ -171,6 +182,34 @@ async def test_select_relevant_evidence_compresses_distractors(monkeypatch):
     assert "register 01" not in context
 
 
+def test_fallback_evidence_prefers_explanation_over_pdf_page_title():
+    spans = build_evidence_spans([{"text": (
+        "02 KIPAS Cargo. "
+        "Air Cargo Handling Services TENTANG KIPAS Air cargo partner untuk paket sehari. "
+        "KIPAS membantu pelanggan menyiapkan dan mengalirkan paket ke proses kargo udara."
+    )}])
+    selected = fallback_evidence_ids("apa itu kipas cargo?", spans)
+    assert selected == ["E2", "E3"]
+    assert "E1" not in selected
+
+
+async def test_select_relevant_evidence_recovers_from_model_none(monkeypatch):
+    monkeypatch.setattr(rag_service.ollama_service, "chat", AsyncMock(return_value="NONE"))
+    results = [{"id": "profile", "score": 0.8, "text": (
+        "02 KIPAS Cargo. Air cargo partner untuk paket sehari yang memerlukan pengiriman cepat. "
+        "KIPAS membantu pelanggan mengalirkan paket ke kargo udara."
+    )}]
+    selected = await select_relevant_evidence("apa itu kipas cargo?", results)
+    assert len(selected) == 1
+    assert "partner untuk paket sehari" in selected[0]["_context_text"]
+    assert "02 KIPAS Cargo" not in selected[0]["_context_text"]
+
+
+def test_evidence_spans_keep_company_abbreviation_together():
+    spans = build_evidence_spans([{"text": "Sebagai layanan dari PT. Sumber Cahaya Semesta, KIPAS berfokus pada pengiriman paket harian."}])
+    assert len(spans) == 1
+
+
 async def test_answer_with_rag_excludes_supported_but_irrelevant_facts(monkeypatch):
     source = {
         "id": "profile",
@@ -194,7 +233,7 @@ async def test_answer_with_rag_excludes_supported_but_irrelevant_facts(monkeypat
     monkeypatch.setattr(
         rag_service.qdrant_service,
         "search",
-        lambda query_vector, top_k: [source],
+        lambda query_vector, top_k, **kwargs: [source],
     )
 
     result = await answer_with_rag("Layanannya apa saja?", top_k=5)

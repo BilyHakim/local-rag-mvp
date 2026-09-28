@@ -8,6 +8,21 @@ const messages = qs('#messages');
 const welcome = qs('#welcomeState');
 const questionInput = qs('#questionInput');
 const toast = qs('#toast');
+let accessKey = '';
+const accessForm = document.createElement('form');
+accessForm.style.cssText = 'padding:10px;display:flex;gap:8px;justify-content:flex-end';
+accessForm.innerHTML = '<label>API key <input type="password" autocomplete="off" aria-label="API key" placeholder="Kunci akses staging"></label><button type="submit">Gunakan key</button><button type="button">Keluar</button>';
+document.body.prepend(accessForm);
+accessForm.addEventListener('submit', event => {
+  event.preventDefault();
+  accessKey = accessForm.querySelector('input').value.trim();
+  accessForm.querySelector('input').value = '';
+  showToast('Kunci akses aktif untuk tab ini.');
+});
+accessForm.querySelector('button[type="button"]').addEventListener('click', () => {
+  accessKey = '';
+  showToast('Kunci akses dihapus.');
+});
 
 function escapeHtml(value = '') {
   const div = document.createElement('div');
@@ -16,6 +31,8 @@ function escapeHtml(value = '') {
 }
 
 async function api(path, options = {}) {
+  options.headers = new Headers(options.headers || {});
+  if (accessKey) options.headers.set('Authorization', `Bearer ${accessKey}`);
   const response = await fetch(path, options);
   let body = {};
   try { body = await response.json(); } catch (_) { /* empty response */ }
@@ -129,7 +146,7 @@ function appendMessage(role, content, sources = []) {
       <div class="source-list" hidden>${sources.map(source => {
         const page = source.page_number ? ` · Hal. ${source.page_number}` : '';
         const table = source.table_name ? ` · ${source.table_name}` : '';
-        return `<div class="source-card"><strong>${escapeHtml(source.source_name || source.filename || 'Sumber tanpa nama')}</strong><span class="source-meta">Skor ${(source.score * 100).toFixed(0)}%${page}${table}</span><p>${escapeHtml(source.text)}</p></div>`;
+        return `<div class="source-card"><strong>${escapeHtml(source.source_name || source.filename || 'Sumber tanpa nama')}</strong><span class="source-meta">Bukti terpilih${page}${table}</span><p>${escapeHtml(source.text)}</p></div>`;
       }).join('')}</div>` : '';
     item.innerHTML = `<div class="message-avatar">AI</div><div class="message-content"><p>${escapeHtml(content)}</p>${sourceMarkup}</div>`;
     const toggle = qs('.source-toggle', item);
@@ -167,7 +184,7 @@ async function ask(question) {
       body: JSON.stringify({ question: question.trim(), top_k: Number(qs('#topK').value) })
     });
     typing.remove();
-    appendMessage('assistant', data.answer, data.sources || []);
+    appendMessage('assistant', data.answer, data.status === 'insufficient_evidence' ? [] : (data.sources || []));
   } catch (error) {
     typing.remove();
     appendMessage('assistant', `Maaf, pertanyaan belum dapat diproses. ${error.message}`);

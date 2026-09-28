@@ -1,0 +1,25 @@
+name: staging-checks
+on: [push, pull_request]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      qdrant:
+        image: qdrant/qdrant:v1.18.0
+        ports:
+          - 6333:6333
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - run: pip install -r requirements-dev.txt
+      - name: Wait for Qdrant
+        run: curl --retry 20 --retry-connrefused --retry-delay 2 --fail http://localhost:6333/collections
+      - run: python -m pytest -q
+        env:
+          APP_ENV: local
+          PYTHONDONTWRITEBYTECODE: '1'
+      - run: docker compose --env-file .env.staging.example -f compose.staging.yml config --no-env-resolution --quiet
+      - run: docker build -t local-rag-staging:test .
