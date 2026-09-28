@@ -54,6 +54,7 @@ class Settings(BaseSettings):
     OCR_DPI: int = 200
     OCR_MIN_TEXT_LENGTH: int = 20
     TESSERACT_CMD: str | None = None
+    TESSDATA_DIR: str | None = None
 
     POSTGRES_ENABLED: bool = False
     POSTGRES_HOST: str = "localhost"

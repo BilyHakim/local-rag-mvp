@@ -1,5 +1,7 @@
 from pathlib import Path
 from io import BytesIO
+import os
+import shutil
 
 import fitz
 
@@ -7,18 +9,44 @@ from app.core.config import settings
 from app.services.text_cleanup_service import clean_ocr_text
 
 
+class OCRUnavailableError(RuntimeError):
+    pass
+
+
+def _configure_tessdata() -> None:
+    if settings.TESSDATA_DIR:
+        os.environ["TESSDATA_PREFIX"] = str(Path(settings.TESSDATA_DIR).resolve())
+
+
+def check_ocr_ready() -> bool:
+    if not settings.OCR_ENABLED:
+        return True
+    executable = settings.TESSERACT_CMD or shutil.which("tesseract")
+    if not executable or not Path(executable).is_file():
+        return False
+    try:
+        import pytesseract
+        pytesseract.pytesseract.tesseract_cmd = executable
+        _configure_tessdata()
+        languages = set(pytesseract.get_languages(config=""))
+        return set(settings.OCR_LANG.split("+")) <= languages
+    except Exception:
+        return False
+
+
 def _ocr_pdf_page(page: fitz.Page) -> str:
     try:
         import pytesseract
         from PIL import Image
     except ImportError as exc:
-        raise RuntimeError(
+        raise OCRUnavailableError(
             "OCR PDF gambar membutuhkan package Pillow dan pytesseract. "
             "Install dependency dari requirements.txt terlebih dahulu."
         ) from exc
 
     if settings.TESSERACT_CMD:
         pytesseract.pytesseract.tesseract_cmd = settings.TESSERACT_CMD
+    _configure_tessdata()
 
     zoom = settings.OCR_DPI / 72
     matrix = fitz.Matrix(zoom, zoom)
@@ -32,7 +60,7 @@ def _ocr_pdf_page(page: fitz.Page) -> str:
             timeout=30,
         )
     except pytesseract.TesseractNotFoundError as exc:
-        raise RuntimeError(
+        raise OCRUnavailableError(
             "OCR PDF gambar membutuhkan Tesseract OCR terpasang di sistem."
         ) from exc
 

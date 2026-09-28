@@ -205,6 +205,16 @@ async def test_select_relevant_evidence_recovers_from_model_none(monkeypatch):
     assert "02 KIPAS Cargo" not in selected[0]["_context_text"]
 
 
+async def test_selector_keeps_short_property_fact_from_same_source(monkeypatch):
+    monkeypatch.setattr(rag_service.ollama_service, "chat", AsyncMock(return_value="E1"))
+    results = [{"id": "pdf", "score": 0.8, "text": (
+        "Proyek Cendana 1234 adalah layanan inspeksi pompa. "
+        "Masa garansinya adalah 18 bulan."
+    )}]
+    selected = await select_relevant_evidence("Berapa masa garansi proyek Cendana 1234?", results)
+    assert "18 bulan" in selected[0]["_context_text"]
+
+
 def test_evidence_spans_keep_company_abbreviation_together():
     spans = build_evidence_spans([{"text": "Sebagai layanan dari PT. Sumber Cahaya Semesta, KIPAS berfokus pada pengiriman paket harian."}])
     assert len(spans) == 1

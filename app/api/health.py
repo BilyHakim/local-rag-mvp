@@ -6,6 +6,7 @@ from fastapi.responses import JSONResponse, PlainTextResponse
 from app.services.ollama_service import ollama_service
 from app.services.qdrant_service import qdrant_service
 from app.services import index_manifest
+from app.services.pdf_service import check_ocr_ready
 from app.core.middleware import metrics
 from app.services.rag_service import rag_metrics
 
@@ -23,6 +24,8 @@ async def ready():
             if name not in names and f"{name}:latest" not in names:
                 raise ValueError("Required model missing")
         await asyncio.to_thread(index_manifest.versions)
+        if not await asyncio.to_thread(check_ocr_ready):
+            raise RuntimeError("OCR unavailable")
         return {"status": "ready"}
     except Exception:
         return JSONResponse({"status": "not_ready"}, status_code=503)

@@ -166,6 +166,7 @@ Semua konfigurasi dibaca dari `.env` oleh `pydantic-settings`.
 | `OCR_DPI` | `200` | Resolusi render halaman sebelum OCR. |
 | `OCR_MIN_TEXT_LENGTH` | `20` | OCR dijalankan jika teks native lebih pendek dari nilai ini. |
 | `TESSERACT_CMD` | kosong | Path executable Tesseract; `.env.example` memberi contoh Windows. |
+| `TESSDATA_DIR` | kosong | Direktori data bahasa Tesseract bila tidak dipasang di lokasi bawaan. |
 | `POSTGRES_ENABLED` | `false` | Mengaktifkan endpoint PostgreSQL; `.env.example` mengisinya `true`. |
 | `POSTGRES_HOST` | `localhost` | Host PostgreSQL. |
 | `POSTGRES_PORT` | `5432` | Port PostgreSQL. |
@@ -224,6 +225,11 @@ Jika memakai `OCR_LANG=eng+ind`, instalasi Tesseract harus menyediakan data baha
 ```dotenv
 TESSERACT_CMD=C:/Program Files/Tesseract-OCR/tesseract.exe
 ```
+
+Jika Tesseract hanya menyediakan `eng`, simpan `eng.traineddata` dan `ind.traineddata`
+di satu direktori, lalu set `TESSDATA_DIR` ke direktori itu (misalnya
+`storage/tessdata`). Endpoint `/api/ready` memeriksa executable dan bahasa OCR
+yang dikonfigurasi.
 
 Jika hanya memakai PDF dengan text layer, OCR dapat dimatikan:
 

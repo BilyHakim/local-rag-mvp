@@ -347,6 +347,22 @@ Pilih bukti minimum yang secara langsung menjawab QUESTION.
         if not selected_ids:
             return []
 
+    # A selector may keep an entity's introductory sentence but miss a short
+    # property sentence immediately after it (for example, "Masa garansinya 18 bulan").
+    selected_sources = {span["source_index"] for span in spans if span["evidence_id"] in selected_ids}
+    question_terms = _tokenize(question) - EVIDENCE_STOPWORDS
+    additions = 0
+    for span in spans:
+        if additions >= 2:
+            break
+        if span["source_index"] not in selected_sources or span["evidence_id"] in selected_ids:
+            continue
+        if len(span["text"]) < 20:
+            continue
+        if len(question_terms & _tokenize(span["text"])) >= 2:
+            selected_ids.add(span["evidence_id"])
+            additions += 1
+
     selected_by_source: dict[int, list[str]] = {}
     for span in spans:
         if span["evidence_id"] in selected_ids:

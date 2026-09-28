@@ -10,7 +10,7 @@ from app.core.security import tenant_context
 from app.schemas.documents import DocumentUploadResponse
 from app.services.chunking_service import chunk_text
 from app.services.docx_service import extract_docx_pages
-from app.services.pdf_service import extract_pdf_pages
+from app.services.pdf_service import OCRUnavailableError, extract_pdf_pages
 from app.services.spreadsheet_service import extract_spreadsheet_pages
 from app.services.ingestion_service import ingest
 from app.services.qdrant_service import qdrant_service
@@ -80,6 +80,8 @@ async def upload_document(file: UploadFile = File(...)):
             skipped_duplicate=False, message="Dokumen berhasil di-index.")
     except ValueError as exc:
         raise HTTPException(422, str(exc)) from exc
+    except OCRUnavailableError as exc:
+        raise HTTPException(503, "OCR belum tersedia pada server") from exc
     finally:
         await file.close()
         if not published:
