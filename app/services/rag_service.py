@@ -494,7 +494,7 @@ def repair_context_dump(answer: str) -> str | None:
     return summary
 
 
-def is_answer_grounded(answer: str, search_results: list[dict]) -> bool:
+def is_answer_grounded(answer: str, search_results: list[dict], question: str | None = None) -> bool:
     if not answer.strip():
         return False
     if answer == FALLBACK_ANSWER:
@@ -510,6 +510,7 @@ def is_answer_grounded(answer: str, search_results: list[dict]) -> bool:
     ):
         return False
     context_token_sets = [_tokenize(context) for context in contexts]
+    question_codes = _extract_entity_codes(question or "")
     protected_answer = re.sub(r"\bPT\.", "PT__ABBR__", answer.strip())
     sentences = re.split(r"(?<=[.!?])\s+", protected_answer)
 
@@ -521,6 +522,17 @@ def is_answer_grounded(answer: str, search_results: list[dict]) -> bool:
         numeric_tokens = [
             token for token in re.findall(r"\d+(?:[.,]\d+)?", sentence)
         ]
+        answer_codes = _extract_entity_codes(sentence)
+        required_codes = answer_codes or (question_codes if len(question_codes) == 1 else set())
+        if numeric_tokens and len(required_codes) == 1:
+            code = next(iter(required_codes))
+            if not any(
+                code in _extract_entity_codes(fact)
+                and set(numeric_tokens).issubset(set(re.findall(r"\d+(?:[.,]\d+)?", fact)))
+                for context in contexts
+                for fact in re.split(r"(?<=[.!?])\s+", context)
+            ):
+                return False
         answer_tokens = _tokenize(sentence)
         significant_tokens = {token for token in answer_tokens if len(token) >= 4 and token not in GROUNDING_STOPWORDS}
         if not significant_tokens:
@@ -546,6 +558,23 @@ def is_answer_grounded(answer: str, search_results: list[dict]) -> bool:
             return False
 
     return True
+
+
+def answer_sources(question: str, answer: str, search_results: list[dict]) -> list[dict]:
+    if answer == FALLBACK_ANSWER:
+        return []
+    protected = re.sub(r"\bPT\.", "PT__ABBR__", answer.strip())
+    selected: list[dict] = []
+    for part in re.split(r"(?<=[.!?])\s+", protected):
+        sentence = part.replace("PT__ABBR__", "PT.").strip()
+        if not sentence:
+            continue
+        supporting = [item for item in search_results if is_answer_grounded(sentence, [item], question)]
+        if not supporting:
+            return []
+        if supporting[0]["id"] not in {item["id"] for item in selected}:
+            selected.append(supporting[0])
+    return selected
 
 
 def clean_answer(answer: str) -> str:
@@ -683,6 +712,7 @@ async def _answer_with_rag(question: str, top_k: int = 5) -> dict:
     answer_is_valid = not is_context_dump(answer) and is_answer_grounded(
         answer,
         evidence_results,
+        question=normalized_question,
     )
     if answer_is_valid:
         answer_is_valid = await verify_answer_scope(
@@ -703,6 +733,7 @@ async def _answer_with_rag(question: str, top_k: int = 5) -> dict:
         answer_is_valid = not is_context_dump(answer) and is_answer_grounded(
             answer,
             evidence_results,
+            question=normalized_question,
         )
         if answer_is_valid:
             answer_is_valid = await verify_answer_scope(
@@ -717,7 +748,10 @@ async def _answer_with_rag(question: str, top_k: int = 5) -> dict:
             "sources": evidence_results,
         }
 
+    cited_sources = answer_sources(normalized_question, answer, evidence_results)
+    if answer != FALLBACK_ANSWER and not cited_sources:
+        return {"answer": FALLBACK_ANSWER, "sources": evidence_results}
     return {
         "answer": answer,
-        "sources": evidence_results,
+        "sources": cited_sources,
     }

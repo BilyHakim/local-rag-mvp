@@ -193,4 +193,20 @@ async def test_rate_limit(monkeypatch):
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
         headers = {"Authorization": "Bearer " + "r" * 32}
         assert (await client.get("/api/metrics", headers=headers)).status_code == 200
-        assert (await client.get("/api/metrics", headers=headers)).status_code == 429
+        rejected = await client.get("/api/metrics", headers=headers)
+        assert rejected.status_code == 429
+        assert rejected.headers["retry-after"]
+        assert rejected.headers["x-request-id"]
+
+
+async def test_overload_response_is_traceable(monkeypatch):
+    from app.core.middleware import SecurityMiddleware
+    monkeypatch.setattr(settings, "APP_ENV", "staging")
+    monkeypatch.setattr(settings, "API_KEYS", {"q" * 32: {"tenant": "alpha", "role": "reader"}})
+    middleware = SecurityMiddleware(app)
+    middleware.inflight = 4
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=middleware), base_url="http://test") as client:
+        response = await client.get("/api/ready", headers={"Authorization": "Bearer " + "q" * 32})
+    assert response.status_code == 503
+    assert response.headers["retry-after"] == "15"
+    assert response.headers["x-request-id"]

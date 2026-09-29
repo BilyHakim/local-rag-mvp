@@ -6,6 +6,7 @@ from app.services.rag_service import (
     _extract_entity_codes,
     _merge_search_results,
     answer_with_rag,
+    answer_sources,
     build_context_text,
     build_evidence_spans,
     fallback_evidence_ids,
@@ -119,6 +120,23 @@ def test_is_answer_grounded_rejects_invented_partnership():
 def test_is_answer_grounded_accepts_supported_company_abbreviation():
     sources = [{"text": "Sebagai layanan dari PT. Sumber Cahaya Semesta, KIPAS berfokus pada pengiriman paket harian."}]
     assert is_answer_grounded("KIPAS adalah layanan dari PT. Sumber Cahaya Semesta.", sources) is True
+
+
+def test_grounding_requires_code_and_number_in_same_fact():
+    sources = [{"text": "Sensor FM01 memiliki modbus_address 247. Sensor FM02 memiliki modbus_address 312."}]
+    assert is_answer_grounded("Sensor FM01 memiliki modbus_address 312.", sources) is False
+    assert is_answer_grounded("312", sources, question="Berapa modbus_address sensor FM01?") is False
+    assert is_answer_grounded("247", sources, question="Berapa modbus_address sensor FM01?") is True
+
+
+def test_answer_sources_excludes_retrieved_distractors():
+    sources = [
+        {"id": "pdf", "text": "Proyek Cendana adalah layanan inspeksi. Masa garansinya adalah 18 bulan."},
+        {"id": "docx", "text": "Proyek Kenari mengirim laporan hari Selasa."},
+        {"id": "ocr", "text": "Masa inspeksi proyek Angkasa adalah 36 bulan."},
+    ]
+    selected = answer_sources("Berapa masa garansi proyek Cendana?", "Masa garansi proyek Cendana adalah 18 bulan.", sources)
+    assert [source["id"] for source in selected] == ["pdf"]
 
 
 def test_clean_answer_keeps_pure_fallback():

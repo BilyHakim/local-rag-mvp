@@ -27,6 +27,8 @@ class SecurityMiddleware:
         path = scope["path"].rstrip("/")
         if not path.startswith("/api") or path == "/api/health":
             return await self.app(scope, receive, send)
+        request_id = str(uuid4())
+        started = time.monotonic()
         headers = dict(scope["headers"])
         token = headers.get(b"authorization", b"").decode(errors="replace").removeprefix("Bearer ")
         principal = None
@@ -36,8 +38,18 @@ class SecurityMiddleware:
         if principal is None and settings.APP_ENV == "local" and not settings.API_KEYS:
             principal = {"tenant": "local", "role": "admin"}
 
-        async def reject(status, detail):
-            await JSONResponse({"detail": detail}, status_code=status)(scope, receive, send)
+        async def reject(status, detail, retry_after=None):
+            response_headers = {"X-Request-ID": request_id, "X-Content-Type-Options": "nosniff", "Cache-Control": "no-store"}
+            if retry_after is not None:
+                response_headers["Retry-After"] = str(retry_after)
+            await JSONResponse({"detail": detail}, status_code=status, headers=response_headers)(scope, receive, send)
+            elapsed = int((time.monotonic() - started) * 1000)
+            metrics["requests"] += 1
+            metrics["errors"] += int(status >= 500)
+            metrics["duration_ms"] += elapsed
+            log.info(json.dumps({"request_id": request_id, "method": scope["method"],
+                                 "status": status, "duration_ms": elapsed,
+                                 "tenant": principal["tenant"] if principal else "unauthenticated"}))
 
         if principal is None:
             return await reject(401, "API key diperlukan")
@@ -49,14 +61,12 @@ class SecurityMiddleware:
         while window and window[0] <= now - 60:
             window.popleft()
         if len(window) >= settings.RATE_LIMIT_PER_MINUTE:
-            return await reject(429, "Batas request tercapai; coba lagi nanti")
+            return await reject(429, "Batas request tercapai; coba lagi nanti", retry_after=max(1, int(60 - (now - window[0]))))
         window.append(now)
         if self.inflight >= 4:
-            return await reject(503, "Server sibuk; coba lagi nanti")
+            return await reject(503, "Server sibuk; coba lagi nanti", retry_after=15)
         self.inflight += 1
         identity = tenant_context.set(principal["tenant"])
-        request_id = str(uuid4())
-        started = time.monotonic()
         status = 500
         response_started = False
 
