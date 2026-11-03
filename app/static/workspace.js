@@ -13,11 +13,17 @@
     if (busy) return;
     const epoch = identityEpoch;
     busy = true;
+    qs('#workspaceFeedback').hidden = true;
     const text = button?.textContent;
     if (button) button.textContent = 'Memproses...';
     refreshActions();
     try { await task(epoch); }
-    catch (error) { if (epoch === identityEpoch) showToast(error.message); }
+    catch (error) {
+      if (epoch === identityEpoch) {
+        showResult(qs('#workspaceFeedback'), error.message, true);
+        showToast(error.message);
+      }
+    }
     finally {
       busy = false;
       if (button && text) button.textContent = text;
@@ -30,8 +36,15 @@
     const epoch = identityEpoch;
     const s = await api(base + '/status');
     if (epoch !== identityEpoch) return;
-    const message = `AI: ${s.text_provider} / ${s.text_model} · Gambar: ${s.image_configured ? 'siap' : 'belum dikonfigurasi'} · Instagram: ${s.instagram_configured && s.public_media_configured ? 'dikonfigurasi' : 'belum lengkap'} · WordPress: ${s.wordpress_configured ? 'dikonfigurasi' : 'belum dikonfigurasi'} · Scheduler: ${s.scheduler_enabled ? 'aktif' : 'nonaktif'}`;
-    qsa('[data-workspace-status]').forEach(el => { el.textContent = message; });
+    const entries = [
+      ['Model teks', `${s.text_provider === 'ollama' ? 'Ollama lokal' : 'API'} / ${s.text_model}`],
+      ['Gambar', s.image_configured ? 'Dikonfigurasi' : 'Belum dikonfigurasi'],
+      ['Instagram', s.instagram_configured && s.public_media_configured ? 'Dikonfigurasi' : 'Belum lengkap'],
+      ['Website', s.wordpress_configured ? 'WordPress dikonfigurasi' : 'Belum dikonfigurasi'],
+      ['Penjadwalan', s.scheduler_enabled ? 'Scheduler aktif' : 'Scheduler nonaktif'],
+    ];
+    qsa('[data-workspace-status]').forEach(el => { el.innerHTML = entries.map(([label, value]) => `<div class="connection-item"><span>${readable(label)}</span><strong>${readable(value)}</strong></div>`).join(''); });
+    qsa('[data-connection-caption]').forEach(el => { el.textContent = `${s.text_provider === 'ollama' ? 'AI lokal' : 'AI via API'} · ${s.scheduler_enabled ? 'penjadwalan aktif' : 'penjadwalan nonaktif'}`; });
   }
 
   async function loadProfile() {
@@ -52,6 +65,7 @@
 
   async function loadAudits() {
     const epoch = identityEpoch;
+    qs('#seoHistory').textContent = 'Memuat riwayat audit...';
     const items = await api(base + '/seo/audits');
     if (epoch !== identityEpoch) return;
     qs('#seoHistory').innerHTML = items.length ? items.map(a => `<button class="workspace-history-item" data-audit-id="${readable(a.id)}">${readable(a.observations.title || a.input_url)}<small>${readable(date(a.updated_at))}</small></button>`).join('') : '<p class="empty-note">Belum ada audit.</p>';
@@ -86,6 +100,7 @@
     if (previewUrl) URL.revokeObjectURL(previewUrl);
     previewUrl = null;
     qs('#socialImage').hidden = true; qs('#socialImage').removeAttribute('src');
+    qs('#imageEmpty').hidden = false;
   }
 
   async function renderPost(post) {
@@ -109,6 +124,7 @@
         const blob = await response.blob();
         if (epoch !== identityEpoch || selected?.id !== post.id || selected?.revision !== post.revision) return;
         previewUrl = URL.createObjectURL(blob); qs('#socialImage').src = previewUrl; qs('#socialImage').hidden = false;
+        qs('#imageEmpty').hidden = true;
       } catch (error) { if (epoch === identityEpoch) showToast(error.message); }
     }
   }
@@ -132,20 +148,26 @@
     qs('#resolveForm button').disabled = busy;
     qs('#postStatus').textContent = selected ? `${labels[selected.status]} · v${selected.revision}${dirty ? ' · belum disimpan' : ''}` : 'Belum ada draft';
     qs('#postMessage').textContent = selected ? [selected.error, selected.scheduled_at ? date(selected.scheduled_at) : '', dirty ? 'Simpan perubahan sebelum membuat gambar atau menyetujui versi ini.' : 'Perubahan materi membatalkan persetujuan dan jadwal.', selected.status === 'published' ? `ID publikasi: ${selected.external_id || '-'}` : ''].filter(Boolean).join(' ') : 'Buat draft untuk mulai mengedit dan menyiapkan publikasi.';
+    if (selected && ['approved', 'scheduled', 'uncertain', 'failed'].includes(selected.status)) qs('#publicationSection').open = true;
   }
 
   function resetPost() {
     selected = null; dirty = false;
     qs('#postEditor').reset(); qs('#socialForm').reset(); qs('#scheduleForm').reset();
-    qs('#socialBriefTitle').textContent = 'Buat konten sesuai brief';
+    qs('#socialBriefTitle').textContent = 'Mulai dengan brief';
     qs('#generateSocial').textContent = 'Buat draft konten';
     qs('#socialConversation').textContent = ''; qs('#socialNotes').textContent = '';
     clearImage(); refreshActions();
+    qs('#publicationSection').open = false;
   }
 
   function tab(name) {
     qs('#socialManual').hidden = name !== 'manual'; qs('#socialPlanner').hidden = name !== 'planner';
-    qsa('[data-social-tab]').forEach(b => b.classList.toggle('active', b.dataset.socialTab === name));
+    qsa('[data-social-tab]').forEach(b => {
+      const active = b.dataset.socialTab === name;
+      b.classList.toggle('active', active);
+      b.setAttribute('aria-pressed', String(active));
+    });
   }
   qsa('[data-social-tab]').forEach(button => button.addEventListener('click', () => {
     tab(button.dataset.socialTab);
@@ -203,12 +225,13 @@
 
   async function loadPosts() {
     const epoch = identityEpoch;
+    qs('#plannerList').textContent = 'Memuat rencana publikasi...';
     const posts = await api(base + '/social/posts');
     if (epoch !== identityEpoch) return;
     qs('#plannerList').innerHTML = posts.length ? posts.map(p => {
       const link = safeLink(p.external_url);
       return `<article class="panel planner-card"><div><span class="post-badge">${readable(labels[p.status])}</span> <small>${readable(p.channel)}</small><h3>${readable(p.title)}</h3><p>${readable(p.caption.slice(0, 240))}${p.caption.length > 240 ? '…' : ''}</p><p>${readable(date(p.scheduled_at))}</p>${p.error ? `<p class="workspace-error">${readable(p.error)}</p>` : ''}${link ? `<a href="${readable(link)}" target="_blank" rel="noopener noreferrer">Lihat posting</a>` : ''}</div><button class="workspace-button" data-post-id="${readable(p.id)}" type="button">Buka / kelola</button></article>`;
-    }).join('') : '<div class="panel"><h3>Belum ada konten</h3><p class="empty-note">Buat draft melalui Chat / Manual, tinjau materi, setujui, lalu tetapkan jadwal.</p></div>';
+    }).join('') : '<div class="panel"><h3>Rencana publikasi masih kosong</h3><p class="empty-note">Mulai dari tab Buat konten. Setelah materi ditinjau dan disetujui, tetapkan jadwal publikasinya di editor.</p></div>';
   }
   qs('#refreshPlanner').addEventListener('click', e => run(e.currentTarget, loadPosts));
   qs('#plannerList').addEventListener('click', event => {
@@ -221,18 +244,30 @@
     });
   });
 
-  qsa('.nav-item').forEach(button => button.addEventListener('click', () => {
-    const view = button.dataset.view;
+  function loadView(view) {
     if (!['brand', 'seo', 'social'].includes(view)) return;
-    status().catch(error => { qsa('[data-workspace-status]').forEach(el => { el.textContent = error.message; }); });
+    const epoch = identityEpoch;
+    status().catch(error => {
+      if (epoch !== identityEpoch) return;
+      qsa('[data-workspace-status]').forEach(el => { el.textContent = `${error.message} Periksa kunci akses, lalu buka kembali menu ini.`; });
+      qsa('[data-connection-caption]').forEach(el => { el.textContent = 'Periksa akses workspace'; });
+    });
     const task = view === 'brand' ? loadProfile : view === 'seo' ? loadAudits : loadPosts;
-    task().catch(error => showToast(error.message));
-  }));
+    task().catch(error => {
+      if (epoch !== identityEpoch) return;
+      const target = view === 'seo' ? '#seoHistory' : view === 'social' ? '#plannerList' : '#workspaceFeedback';
+      showResult(qs(target), `${error.message} Periksa koneksi atau kunci akses, lalu muat ulang menu ini.`, true);
+    });
+  }
+  document.addEventListener('workspace-view-changed', event => loadView(event.detail.view));
   document.addEventListener('workspace-identity-changed', () => {
     identityEpoch++;
     resetPost(); currentAudit = null; qs('#brandForm').reset();
     ['seoResult', 'seoHistory', 'plannerList'].forEach(id => { qs('#' + id).textContent = ''; });
     qsa('[data-workspace-status]').forEach(el => { el.textContent = 'Pilih menu untuk memuat workspace.'; });
+    qs('#workspaceFeedback').hidden = true;
+    loadView(qs('.nav-item.active').dataset.view);
   });
   refreshActions();
+  loadView(qs('.nav-item.active').dataset.view);
 })();

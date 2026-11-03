@@ -9,19 +9,21 @@ const welcome = qs('#welcomeState');
 const questionInput = qs('#questionInput');
 const toast = qs('#toast');
 let accessKey = '';
-const accessForm = document.createElement('form');
-accessForm.style.cssText = 'padding:10px;display:flex;gap:8px;justify-content:flex-end';
-accessForm.innerHTML = '<label>API key <input type="password" autocomplete="off" aria-label="API key" placeholder="Kunci akses staging"></label><button type="submit">Gunakan key</button><button type="button">Keluar</button>';
-document.body.prepend(accessForm);
+const accessForm = qs('#accessForm');
+const accessControl = qs('#accessControl');
 accessForm.addEventListener('submit', event => {
   event.preventDefault();
   accessKey = accessForm.querySelector('input').value.trim();
   accessForm.querySelector('input').value = '';
+  qs('#accessStatus').textContent = 'Key aktif di tab ini';
+  accessControl.open = false;
   showToast('Kunci akses aktif untuk tab ini.');
   document.dispatchEvent(new Event('workspace-identity-changed'));
 });
 accessForm.querySelector('button[type="button"]').addEventListener('click', () => {
   accessKey = '';
+  qs('#accessStatus').textContent = 'Akses workspace';
+  accessControl.open = false;
   showToast('Kunci akses dihapus.');
   document.dispatchEvent(new Event('workspace-identity-changed'));
 });
@@ -55,11 +57,25 @@ function showResult(element, message, isError = false) {
   element.classList.toggle('error', isError);
 }
 
-function switchView(name) {
-  qsa('.nav-item').forEach(item => item.classList.toggle('active', item.dataset.view === name));
+function switchView(name, focus = true) {
+  if (!qs(`#${name}View`)) return;
+  qsa('.nav-item').forEach(item => {
+    const active = item.dataset.view === name;
+    item.classList.toggle('active', active);
+    if (active) item.setAttribute('aria-current', 'page'); else item.removeAttribute('aria-current');
+  });
   qsa('.view').forEach(view => view.classList.toggle('active', view.id === `${name}View`));
   sidebar.classList.remove('open');
   if (window.matchMedia('(max-width: 760px)').matches) updateSidebarButtons(true);
+  history.replaceState(null, '', `#${name}`);
+  document.title = `${qs(`#${name}View h1`).textContent} | Local RAG`;
+  if (focus) {
+    const heading = qs(`#${name}View h1`);
+    heading.tabIndex = -1;
+    heading.focus({ preventScroll: true });
+    window.scrollTo(0, 0);
+  }
+  document.dispatchEvent(new CustomEvent('workspace-view-changed', { detail: { view: name } }));
 }
 
 qsa('.nav-item').forEach(item => item.addEventListener('click', () => switchView(item.dataset.view)));
@@ -70,7 +86,9 @@ function updateSidebarButtons(hidden) {
   qsa('.mobile-menu, [data-mobile-menu]').forEach(toggle => {
     toggle.setAttribute('aria-label', label);
     toggle.setAttribute('title', title);
-    toggle.innerHTML = `<svg class="sidebar-toggle-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M9 3v18${direction}"/></svg>`;
+    toggle.setAttribute('aria-controls', 'workspaceSidebar');
+    toggle.setAttribute('aria-expanded', String(!hidden));
+    toggle.innerHTML = `<svg class="sidebar-toggle-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M9 3v18${direction}"/></svg><span class="menu-text">Menu</span>`;
   });
   const collapse = qs('#sidebarCollapse');
   if (collapse) {
@@ -78,12 +96,22 @@ function updateSidebarButtons(hidden) {
     collapse.setAttribute('title', hidden ? 'Perluas sidebar' : 'Ciutkan sidebar');
     collapse.setAttribute('aria-expanded', String(!hidden));
   }
+  const mobile = window.matchMedia('(max-width: 760px)').matches;
+  sidebar.inert = mobile && hidden;
+  qs('#mainContent').inert = mobile && !hidden;
+  qs('#sidebarBackdrop').hidden = !mobile || hidden;
+}
+
+let menuTrigger = null;
+function closeMobileMenu() {
+  sidebar.classList.remove('open');
+  updateSidebarButtons(true);
+  if (menuTrigger) menuTrigger.focus();
 }
 
 qs('#sidebarCollapse').addEventListener('click', () => {
   if (window.matchMedia('(max-width: 760px)').matches) {
-    sidebar.classList.remove('open');
-    updateSidebarButtons(true);
+    closeMobileMenu();
     return;
   }
   const hidden = appShell.classList.toggle('sidebar-hidden');
@@ -94,13 +122,36 @@ qs('#sidebarCollapse').addEventListener('click', () => {
 qsa('.mobile-menu, [data-mobile-menu]').forEach(button => button.addEventListener('click', () => {
   if (window.matchMedia('(max-width: 760px)').matches) {
     const open = sidebar.classList.toggle('open');
+    menuTrigger = button;
     updateSidebarButtons(!open);
+    if (open) qs('#sidebarCollapse').focus();
     return;
   }
   const hidden = appShell.classList.toggle('sidebar-hidden');
   localStorage.setItem('rag-sidebar-hidden', String(hidden));
   updateSidebarButtons(hidden);
 }));
+qs('#sidebarBackdrop').addEventListener('click', closeMobileMenu);
+qs('.brand').addEventListener('click', event => { event.preventDefault(); switchView('chat'); });
+document.addEventListener('keydown', event => {
+  if (event.key === 'Escape') {
+    if (sidebar.classList.contains('open')) closeMobileMenu();
+    if (accessControl.open) { accessControl.open = false; qs('summary', accessControl).focus(); }
+  }
+  if (event.key === 'Tab' && sidebar.classList.contains('open') && window.matchMedia('(max-width: 760px)').matches) {
+    const controls = qsa('button:not(:disabled), a[href]', sidebar).filter(el => !el.hidden && el.getClientRects().length);
+    const first = controls[0], last = controls.at(-1);
+    if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+    else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+  }
+});
+document.addEventListener('click', event => {
+  if (accessControl.open && !accessControl.contains(event.target)) accessControl.open = false;
+});
+window.matchMedia('(max-width: 760px)').addEventListener('change', () => {
+  sidebar.classList.remove('open');
+  updateSidebarButtons(window.matchMedia('(max-width: 760px)').matches || appShell.classList.contains('sidebar-hidden'));
+});
 
 function applyTheme(theme) {
   document.documentElement.dataset.theme = theme;
@@ -116,7 +167,7 @@ if (localStorage.getItem('rag-sidebar-hidden') === 'true' && !window.matchMedia(
   appShell.classList.add('sidebar-hidden');
   updateSidebarButtons(true);
 }
-if (window.matchMedia('(max-width: 760px)').matches) updateSidebarButtons(true);
+updateSidebarButtons(window.matchMedia('(max-width: 760px)').matches || appShell.classList.contains('sidebar-hidden'));
 qs('#themeToggle').addEventListener('click', () => {
   const theme = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
   applyTheme(theme);
@@ -127,7 +178,8 @@ async function checkHealth() {
   const dot = qs('#statusDot');
   const label = qs('#statusText');
   try {
-    await api('/api/health');
+    const health = await api('/api/health');
+    qs('#apiDocsLink').hidden = health.env !== 'local';
     dot.className = 'status-dot online';
     label.textContent = 'Online';
   } catch (_) {
@@ -166,7 +218,7 @@ function appendMessage(role, content, sources = []) {
 function appendTyping() {
   const item = document.createElement('article');
   item.className = 'message assistant';
-  item.innerHTML = '<div class="message-avatar">AI</div><div class="message-content"><div class="typing"><span></span><span></span><span></span></div></div>';
+  item.innerHTML = '<div class="message-avatar">AI</div><div class="message-content"><p class="typing" role="status">Mencari jawaban dari knowledge...</p></div>';
   messages.appendChild(item);
   messages.scrollTop = messages.scrollHeight;
   return item;
@@ -268,9 +320,18 @@ qs('#searchForm').addEventListener('submit', async event => {
       body: JSON.stringify({ query: qs('#searchInput').value.trim(), top_k: 5 })
     });
     container.innerHTML = data.results.length ? data.results.map(item => `
-      <article class="result-item"><header><strong>${escapeHtml(item.source_name || item.filename || 'Tanpa nama')}</strong><span class="score">${(item.score * 100).toFixed(0)}% cocok</span></header><p>${escapeHtml(item.text)}</p></article>
+      <article class="result-item"><header><strong>${escapeHtml(item.source_name || item.filename || 'Tanpa nama')}</strong><span class="score">Skor pencarian: ${Number(item.score).toFixed(3)}</span></header><p>${escapeHtml(item.text)}</p></article>
     `).join('') : '<p class="empty-note">Tidak ada hasil yang cocok.</p>';
   } catch (error) { container.innerHTML = `<p class="empty-note">${escapeHtml(error.message)}</p>`; showToast(error.message); }
 });
 
+document.addEventListener('workspace-identity-changed', () => {
+  qsa('.message', messages).forEach(message => message.remove());
+  welcome.hidden = false;
+  qs('#searchResults').textContent = 'Cari knowledge untuk melihat sumber pada workspace ini.';
+});
+qsa('.nav-item').forEach(item => { item.setAttribute('aria-label', item.textContent.trim()); });
+qsa('svg').forEach(icon => icon.setAttribute('aria-hidden', 'true'));
+const initialView = location.hash.slice(1);
+if (['chat', 'knowledge', 'seo', 'social', 'brand'].includes(initialView)) switchView(initialView, false);
 checkHealth();

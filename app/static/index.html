@@ -3,32 +3,32 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Asisten AI lokal untuk mencari jawaban dari dokumen Anda.">
+  <meta name="description" content="Workspace untuk knowledge perusahaan, audit SEO, dan produksi konten social media.">
   <title>Company AI Workspace</title>
-  <link rel="stylesheet" href="/static/styles.css?v=6">
+  <link rel="stylesheet" href="/static/styles.css?v=9">
 </head>
 <body>
+  <a class="skip-link" href="#mainContent">Langsung ke area kerja</a>
   <div class="app-shell">
-    <aside class="sidebar">
+    <aside class="sidebar" id="workspaceSidebar" aria-label="Menu workspace">
       <button class="sidebar-collapse" id="sidebarCollapse" type="button" aria-label="Ciutkan menu samping" aria-expanded="true" title="Ciutkan sidebar">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14 7-5 5 5 5"/></svg>
       </button>
-      <a class="brand" href="#" aria-label="Local RAG">
-        <span class="brand-mark" aria-hidden="true">
-          <svg viewBox="0 0 24 24"><path d="M8.4 3.6a2 2 0 0 1 2-1.1h3.2a2 2 0 0 1 2 1.1l1.6 2.8L20 8a2 2 0 0 1 1 1.7v3.6a2 2 0 0 1-1 1.7l-2.8 1.6-1.6 2.8a2 2 0 0 1-2 1.1h-3.2a2 2 0 0 1-2-1.1l-1.6-2.8L4 15a2 2 0 0 1-1-1.7V9.7A2 2 0 0 1 4 8l2.8-1.6 1.6-2.8Z"/><circle cx="12" cy="11.5" r="3.5"/></svg>
-        </span>
+      <a class="brand" href="#chat" aria-label="Local RAG, buka Knowledge">
         <span class="brand-label">Local <strong>RAG</strong></span>
+        <span class="brand-short" aria-hidden="true">LR</span>
       </a>
+      <p class="sidebar-caption">Riset &amp; produksi konten</p>
 
       <nav class="nav" aria-label="Navigasi utama">
-        <button class="nav-item active" data-view="chat">
+        <button class="nav-item active" data-view="chat" title="Knowledge / RAG" aria-label="Knowledge / RAG" aria-current="page">
           <svg viewBox="0 0 24 24"><path d="M20 15a3 3 0 0 1-3 3H8l-5 3V7a3 3 0 0 1 3-3h11a3 3 0 0 1 3 3v8Z"/></svg>
           <span class="nav-label">Knowledge / RAG</span>
         </button>
         <button class="nav-item" data-view="seo" title="SEO Specialist"><svg viewBox="0 0 24 24"><circle cx="10" cy="10" r="6"/><path d="m15 15 6 6M7 11l2-3 2 2 2-4"/></svg><span class="nav-label">SEO Specialist</span></button>
         <button class="nav-item" data-view="social" title="Social Media Specialist"><svg viewBox="0 0 24 24"><path d="m3 10 14-6v16L3 14v-4ZM7 15l2 6M20 8v8"/></svg><span class="nav-label">Social Media</span></button>
         <button class="nav-item" data-view="brand" title="Profil perusahaan"><svg viewBox="0 0 24 24"><path d="M4 21V5l8-3 8 3v16M8 8h2m4 0h2M8 12h2m4 0h2M10 21v-5h4v5"/></svg><span class="nav-label">Profil perusahaan</span></button>
-        <button class="nav-item" data-view="knowledge">
+        <button class="nav-item" data-view="knowledge" title="Knowledge Base" aria-label="Knowledge Base">
           <svg viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V4H6.5A2.5 2.5 0 0 0 4 6.5v13Z"/><path d="M4 19.5A2.5 2.5 0 0 0 6.5 22H20v-5H6.5A2.5 2.5 0 0 0 4 19.5Z"/></svg>
           <span class="nav-label">Knowledge Base</span>
         </button>
@@ -44,19 +44,32 @@
           <span class="status-dot" id="statusDot"></span>
           <div class="sidebar-label"><span class="status-label">Status sistem</span><strong id="statusText">Memeriksa...</strong></div>
         </div>
-        <a class="docs-link" href="/docs" target="_blank" rel="noreferrer">API Docs <span>↗</span></a>
+        <a class="docs-link" href="/docs" target="_blank" rel="noreferrer" id="apiDocsLink">API Docs <span aria-hidden="true">↗</span></a>
       </div>
     </aside>
 
-    <main class="main">
+    <button class="sidebar-backdrop" id="sidebarBackdrop" type="button" tabindex="-1" aria-label="Tutup menu" hidden></button>
+    <main class="main" id="mainContent" tabindex="-1">
+      <div class="utility-bar">
+        <span class="utility-label">Company workspace</span>
+        <details class="access-control" id="accessControl">
+          <summary><span id="accessStatus">Akses workspace</span></summary>
+          <form class="access-form" id="accessForm">
+            <label class="field"><span>Kunci akses workspace</span><input id="accessKeyInput" type="password" autocomplete="off" placeholder="Masukkan kunci akses" required></label>
+            <p>Kunci hanya aktif di tab ini. Untuk penggunaan lokal tanpa autentikasi, Anda dapat langsung bekerja.</p>
+            <div class="access-actions"><button class="primary-button dark" type="submit">Gunakan key</button><button class="workspace-button" type="button" id="logoutButton">Keluar</button></div>
+          </form>
+        </details>
+      </div>
+      <p class="workspace-feedback" id="workspaceFeedback" role="alert" hidden></p>
       <section class="view active" id="chatView">
         <header class="topbar">
           <button class="mobile-menu" id="menuButton" aria-label="Tutup menu samping" title="Tutup sidebar">
             <svg class="sidebar-toggle-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M9 3v18M15 9l-3 3 3 3"/></svg>
           </button>
           <div>
-            <p class="eyebrow">WORKSPACE</p>
-            <h1>Tanya dokumen Anda</h1>
+            <p class="eyebrow">Workspace / Knowledge</p>
+            <h1>Tanya knowledge perusahaan</h1>
           </div>
           <button class="new-chat" id="newChatButton">
             <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
@@ -67,25 +80,24 @@
         <div class="chat-wrap">
           <div class="messages" id="messages" aria-live="polite">
             <div class="welcome" id="welcomeState">
-              <span class="welcome-icon">
-                <svg viewBox="0 0 24 24"><path d="m12 3 1.3 4.2a5 5 0 0 0 3.5 3.5L21 12l-4.2 1.3a5 5 0 0 0-3.5 3.5L12 21l-1.3-4.2a5 5 0 0 0-3.5-3.5L3 12l4.2-1.3a5 5 0 0 0 3.5-3.5L12 3Z"/></svg>
-              </span>
-              <h2>Apa yang ingin Anda cari?</h2>
-              <p>Ajukan pertanyaan tentang dokumen dan knowledge base Anda. Jawaban dibuat dari sumber yang sudah diindeks.</p>
+              <p class="welcome-kicker">Mulai dari informasi yang Anda miliki.</p>
+              <h2>Jawaban yang<br>punya sumber.</h2>
+              <p>Tanyakan isi dokumen, ringkas informasi, atau temukan fakta perusahaan. Jawaban merujuk pada knowledge yang sudah Anda tambahkan.</p>
               <div class="suggestions">
-                <button data-question="Buat ringkasan dari dokumen yang tersedia">Ringkas dokumen saya <span>→</span></button>
-                <button data-question="Apa saja poin penting dalam knowledge base?">Temukan poin penting <span>→</span></button>
-                <button data-question="Sumber data apa saja yang tersedia?">Lihat sumber tersedia <span>→</span></button>
+                <button data-question="Buat ringkasan dari dokumen yang tersedia">Ringkas dokumen</button>
+                <button data-question="Apa saja poin penting dalam knowledge base?">Cari poin penting</button>
+                <button data-question="Sumber data apa saja yang tersedia?">Tanyakan sumber data</button>
               </div>
             </div>
           </div>
 
           <form class="composer" id="chatForm">
+            <label for="questionInput">Pertanyaan Anda</label>
             <textarea id="questionInput" rows="1" maxlength="4000" placeholder="Tanyakan sesuatu tentang dokumen Anda..." aria-label="Pertanyaan" required></textarea>
             <div class="composer-actions">
               <label class="top-k">Sumber <select id="topK" aria-label="Jumlah sumber"><option value="3">3</option><option value="5" selected>5</option><option value="10">10</option></select></label>
               <button class="send-button" type="submit" id="sendButton" aria-label="Kirim pertanyaan">
-                <svg viewBox="0 0 24 24"><path d="m5 12 14-7-4 14-3-6-7-1Z"/><path d="m12 13 7-8"/></svg>
+                <span>Kirim</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 14-7-4 14-3-6-7-1Z"/><path d="m12 13 7-8"/></svg>
               </button>
             </div>
             <p class="composer-hint">Enter untuk mengirim · Shift + Enter untuk baris baru</p>
@@ -98,7 +110,7 @@
           <button class="mobile-menu" data-mobile-menu aria-label="Tutup menu samping" title="Tutup sidebar">
             <svg class="sidebar-toggle-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M9 3v18M15 9l-3 3 3 3"/></svg>
           </button>
-          <div><p class="eyebrow">DATA SOURCES</p><h1>Knowledge Base</h1></div>
+          <div><p class="eyebrow">Workspace / Sumber informasi</p><h1>Knowledge Base</h1></div>
         </header>
 
         <div class="knowledge-wrap">
@@ -138,7 +150,7 @@
             <div class="search-head"><div><h3>Cari knowledge</h3><p>Periksa informasi yang sudah tersimpan.</p></div></div>
             <form class="search-form" id="searchForm">
               <span class="search-icon"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg></span>
-              <input id="searchInput" placeholder="Cari isi knowledge base..." required minlength="2">
+              <label for="searchInput">Cari isi knowledge base</label><input id="searchInput" placeholder="Kata atau topik yang ingin dicari" required minlength="2">
               <button type="submit">Cari</button>
             </form>
             <div class="search-results" id="searchResults"><p class="empty-note">Hasil pencarian akan tampil di sini.</p></div>
@@ -146,9 +158,9 @@
         </div>
       </section>
       <section class="view" id="brandView">
-        <header class="topbar"><button class="mobile-menu" data-mobile-menu aria-label="Buka menu">☰</button><div><p class="eyebrow">SHARED KNOWLEDGE</p><h1>Profil perusahaan</h1></div></header>
+        <header class="topbar"><button class="mobile-menu" data-mobile-menu aria-label="Buka menu">Menu</button><div><p class="eyebrow">Workspace / Identitas brand</p><h1>Profil perusahaan</h1></div></header>
         <div class="workspace-wrap">
-          <div class="workspace-status" data-workspace-status role="status">Memuat konfigurasi...</div>
+          <details class="workspace-status"><summary>Koneksi workspace <span class="connection-caption" data-connection-caption>Memuat status...</span></summary><div class="connection-items" data-workspace-status role="status">Memuat konfigurasi...</div></details>
           <div class="section-intro"><div><h2>Satu profil untuk seluruh specialist</h2><p>Simpan fakta brand, audiens, dan arahan kreatif. Dokumen pendukung dapat ditambahkan melalui Knowledge Base.</p></div></div>
           <form id="brandForm" class="panel workspace-form">
             <div class="workspace-grid">
@@ -166,9 +178,9 @@
         </div>
       </section>
       <section class="view" id="seoView">
-        <header class="topbar"><button class="mobile-menu" data-mobile-menu aria-label="Buka menu">☰</button><div><p class="eyebrow">SEO SPECIALIST</p><h1>Temukan peluang perbaikan website</h1></div></header>
+        <header class="topbar"><button class="mobile-menu" data-mobile-menu aria-label="Buka menu">Menu</button><div><p class="eyebrow">Workspace / SEO Specialist</p><h1>Audit halaman website</h1></div></header>
         <div class="workspace-wrap">
-          <div class="workspace-status" data-workspace-status role="status">Memuat konfigurasi...</div>
+          <details class="workspace-status"><summary>Koneksi workspace <span class="connection-caption" data-connection-caption>Memuat status...</span></summary><div class="connection-items" data-workspace-status role="status">Memuat konfigurasi...</div></details>
           <form id="seoForm" class="panel workspace-form">
             <label class="field"><span>URL halaman</span><input name="url" type="url" required maxlength="2000" placeholder="https://perusahaan.com/layanan"></label>
             <label class="field"><span>Tujuan / konteks audit</span><textarea name="goal" rows="3" maxlength="3000" placeholder="Contoh: Perbaiki landing page untuk calon pelanggan perusahaan"></textarea></label>
@@ -180,24 +192,26 @@
         </div>
       </section>
       <section class="view" id="socialView">
-        <header class="topbar"><button class="mobile-menu" data-mobile-menu aria-label="Buka menu">☰</button><div><p class="eyebrow">SOCIAL MEDIA SPECIALIST</p><h1>Dari ide menjadi konten terjadwal</h1></div><button class="new-chat" type="button" id="newSocial" aria-label="Buat konten baru"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Konten baru</button></header>
+        <header class="topbar"><button class="mobile-menu" data-mobile-menu aria-label="Buka menu">Menu</button><div><p class="eyebrow">Workspace / Social Media Specialist</p><h1>Studio konten</h1></div><button class="new-chat" type="button" id="newSocial" aria-label="Buat konten baru"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Konten baru</button></header>
         <div class="workspace-wrap">
-          <div class="workspace-status" data-workspace-status role="status">Memuat konfigurasi...</div>
-          <div class="workspace-tabs" role="group" aria-label="Mode Social Media"><button type="button" class="active" data-social-tab="manual">Chat / Manual</button><button type="button" data-social-tab="planner">Content planner / Otomatis</button></div>
+          <div class="workspace-intro"><p>Buat materi sesuai brief, gunakan referensi perusahaan, lalu tinjau sebelum publikasi.</p></div>
+          <details class="workspace-status"><summary>Koneksi workspace <span class="connection-caption" data-connection-caption>Memuat status...</span></summary><div class="connection-items" data-workspace-status role="status">Memuat konfigurasi...</div></details>
+          <div class="workspace-tabs" role="group" aria-label="Mode Social Media"><button type="button" class="active" data-social-tab="manual" aria-pressed="true" aria-controls="socialManual">Buat konten</button><button type="button" data-social-tab="planner" aria-pressed="false" aria-controls="socialPlanner">Content planner</button></div>
           <div id="socialManual" class="workspace-grid workspace-results">
             <div>
-              <form id="socialForm" class="panel workspace-form">
-                <h3 id="socialBriefTitle">Buat konten sesuai brief</h3>
-                <label class="field"><span>Kanal</span><select name="channel"><option value="instagram">Instagram — gambar + caption</option><option value="website">Website — artikel WordPress</option></select></label>
+              <form id="socialForm" class="panel workspace-form brief-panel">
+                <div class="work-heading"><span class="work-index" aria-hidden="true">01</span><h2 id="socialBriefTitle">Mulai dengan brief</h2></div>
+                <p class="panel-description">Ceritakan tema, tujuan, dan pesan yang ingin disampaikan.</p>
+                <label class="field"><span>Kanal publikasi</span><select name="channel"><option value="instagram">Instagram (gambar + caption)</option><option value="website">Website (artikel WordPress)</option></select></label>
                 <div id="socialConversation" class="social-conversation"></div>
-                <label class="field"><span>Brief / instruksi revisi</span><textarea name="brief" rows="5" minlength="3" maxlength="8000" required placeholder="Buat konten edukasi tentang layanan kami, tema ..."></textarea></label>
+                <label class="field"><span>Brief atau arahan revisi</span><textarea name="brief" rows="6" minlength="3" maxlength="8000" required placeholder="Tuliskan tema, target audiens, pesan utama, dan gaya bahasa yang Anda inginkan."></textarea></label>
                 <label class="workspace-check"><input name="use_knowledge" type="checkbox" checked> Gunakan knowledge perusahaan</label>
                 <button class="primary-button" type="submit" id="generateSocial">Buat draft konten</button>
               </form>
               <div id="socialNotes" class="workspace-notes" aria-live="polite"></div>
             </div>
-            <div class="panel workspace-form">
-              <div class="workspace-row"><h3>Preview dan editor</h3><span id="postStatus" class="post-badge">Belum ada draft</span></div>
+            <div class="panel workspace-form editor-panel">
+              <div class="workspace-row"><div class="work-heading"><span class="work-index" aria-hidden="true">02</span><h2>Materi konten</h2></div><span id="postStatus" class="post-badge" role="status">Belum ada draft</span></div>
               <form id="postEditor" class="workspace-form">
                 <label class="field"><span>Judul</span><input name="title" required maxlength="200"></label>
                 <label class="field"><span>Caption / isi artikel</span><textarea name="caption" required maxlength="12000" rows="10"></textarea></label>
@@ -205,9 +219,11 @@
                 <label class="field"><span>Brief gambar</span><textarea name="image_prompt" maxlength="4000" rows="4"></textarea></label>
                 <button class="workspace-button" type="submit" id="saveDraft" disabled>Simpan perubahan</button>
               </form>
-              <img id="socialImage" class="social-image" alt="Preview gambar konten" hidden>
-              <div class="workspace-actions"><button type="button" class="workspace-button" id="generateImage" disabled>Generate gambar</button><button type="button" class="workspace-button" id="approvePost" disabled>Setujui versi ini</button><button type="button" class="primary-button" id="publishPost" disabled>Terbitkan sekarang</button></div>
+              <div class="image-preview"><img id="socialImage" class="social-image" alt="Preview gambar konten" width="1024" height="1024" hidden><p id="imageEmpty">Pratinjau gambar akan muncul setelah Anda membuat visual dari brief gambar.</p></div>
+              <button type="button" class="workspace-button" id="generateImage" disabled>Buat gambar konten</button>
               <p id="postMessage" class="empty-note" role="status">Buat draft untuk mulai mengedit dan menyiapkan publikasi.</p>
+              <details class="publication-section" id="publicationSection"><summary>Publikasi &amp; jadwal</summary>
+              <div class="workspace-actions"><button type="button" class="workspace-button" id="approvePost" disabled>Setujui versi ini</button><button type="button" class="primary-button dark" id="publishPost" disabled>Terbitkan sekarang</button></div>
               <form id="scheduleForm" class="workspace-form">
                 <label class="field"><span>Jadwal publikasi (WIB / UTC+7)</span><input type="datetime-local" name="scheduled_at" required></label>
                 <button class="workspace-button" type="submit" id="schedulePost" disabled>Jadwalkan versi yang disetujui</button>
@@ -220,10 +236,11 @@
                 <label class="field"><span>Link posting</span><input name="external_url" type="url" maxlength="2000"></label>
                 <button class="workspace-button" type="submit">Catat hasil pemeriksaan</button>
               </form>
+              </details>
             </div>
           </div>
           <div id="socialPlanner" hidden>
-            <div class="section-intro"><div><h2>Content planner</h2><p>Mode otomatis menerbitkan materi final yang telah disetujui. Jadwal memakai WIB. Server dan scheduler harus tetap berjalan.</p></div><button class="workspace-button" id="refreshPlanner" type="button">Muat ulang</button></div>
+            <div class="section-intro"><div><h2>Rencana publikasi</h2><p>Materi yang disetujui dapat terbit otomatis sesuai jadwal WIB. Server dan scheduler harus tetap berjalan.</p></div><button class="workspace-button" id="refreshPlanner" type="button">Muat ulang</button></div>
             <div id="plannerList" class="planner-list" aria-live="polite"></div>
           </div>
         </div>
@@ -231,7 +248,7 @@
     </main>
   </div>
   <div class="toast" id="toast" role="status"></div>
-  <script src="/static/app.js?v=4"></script>
-  <script src="/static/workspace.js?v=1"></script>
+  <script src="/static/app.js?v=5"></script>
+  <script src="/static/workspace.js?v=2"></script>
 </body>
 </html>
