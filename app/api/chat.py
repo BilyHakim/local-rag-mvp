@@ -10,6 +10,7 @@ from app.schemas.chat import (
 )
 from app.services.ollama_service import ollama_service
 from app.services.rag_service import answer_with_rag
+from app.services.ai_service import AIProviderError
 
 
 router = APIRouter()
@@ -21,6 +22,8 @@ async def chat_basic(payload: ChatBasicRequest):
         answer = await ollama_service.generate(payload.message)
         return ChatBasicResponse(answer=answer)
 
+    except AIProviderError:
+        raise
     except Exception as exc:
         raise HTTPException(
             status_code=500,
@@ -38,6 +41,8 @@ async def embedding_test(payload: EmbeddingTestRequest):
             sample=vector[:10],
         )
 
+    except AIProviderError:
+        raise
     except Exception as exc:
         raise HTTPException(
             status_code=500,
@@ -55,6 +60,8 @@ async def chat_rag(payload: ChatRagRequest):
 
         return ChatRagResponse(**result)
 
+    except AIProviderError:
+        raise
     except Exception as exc:
         raise HTTPException(
             status_code=500,

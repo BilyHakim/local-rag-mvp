@@ -22,10 +22,33 @@ AI_EMBEDDING_MODEL=<model-embedding>
 ```
 
 Adapter teks memakai `/chat/completions`, `messages`, `max_completion_tokens`,
-dan `store=false`; adapter embedding memakai `/embeddings`. Provider kompatibel
+dan `store=false` untuk provider selain Google; adapter embedding memakai `/embeddings`. Provider kompatibel
 harus mendukung kontrak ini. Model specialist harus dapat menghasilkan JSON sesuai
 schema yang dikirim di prompt; keluaran tidak valid ditolak sebelum disimpan.
 Belum ada tool loop otonom; workflow dan tindakan eksternal dijalankan kode aplikasi.
+
+### Gemini dari Google AI Studio
+
+```dotenv
+AI_PROVIDER=api
+AI_API_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai
+AI_API_KEY=<gemini-api-key>
+AI_CHAT_MODEL=gemini-3.8-flash
+EMBEDDING_PROVIDER=ollama
+```
+
+Adapter mengenali hostname Google dan tidak mengirim `store`, karena endpoint
+Google menolaknya dengan HTTP 400. Request Gemini memakai `reasoning_effort=low`
+dan anggaran completion minimal 4096 token untuk memberi ruang thinking sebelum
+output singkat penyaring/verifikator RAG. Anggaran ini adalah batas, bukan jumlah
+token yang selalu dipakai. Pilih model yang mendukung reasoning effort tersebut.
+Embedding Ollama tetap digunakan sehingga indeks lama tidak perlu diganti.
+
+Error provider ditampilkan sebagai pesan tetap tanpa body mentah, prompt, atau
+key: key/izin ditolak, model tidak ditemukan, kuota tercapai, koneksi gagal, atau
+model sedang sibuk. HTTP 503 dari Google memerlukan percobaan ulang setelah
+beberapa saat; mengganti embedding tidak memperbaiki kondisi tersebut. Tidak ada
+retry generasi otomatis. Status Online di sidebar hanya menunjukkan FastAPI hidup.
 
 `AI_PROVIDER` juga berlaku untuk jawaban RAG dan chat basic. Embedding mempunyai
 pilihan provider tersendiri. Untuk prototype API penuh, Ollama tidak diperlukan;

@@ -16,7 +16,7 @@ from app.api.postgres import router as postgres_router
 from app.core.config import settings
 from app.core.middleware import SecurityMiddleware
 from app.services.ollama_service import ollama_service
-from app.services.ai_service import ai_service
+from app.services.ai_service import ai_service, AIProviderError
 from app.api.workspace import router as workspace_router, media_router
 from app.services.publishing_service import scheduler_loop
 from starlette.exceptions import HTTPException
@@ -48,6 +48,14 @@ app = FastAPI(
 app.add_middleware(SecurityMiddleware)
 app.include_router(workspace_router, prefix="/api", tags=["workspace"])
 app.include_router(media_router)
+
+
+@app.exception_handler(AIProviderError)
+async def ai_provider_error(request, exc):
+    logging.getLogger("http").error("ai_provider_failed status=%d", exc.status_code)
+    headers = {"Retry-After": "30"} if exc.status_code in {429, 503} else {}
+    return JSONResponse(status_code=exc.status_code,
+                        content={"detail": exc.detail, "code": "ai_provider_error"}, headers=headers)
 
 
 @app.exception_handler(HTTPException)
