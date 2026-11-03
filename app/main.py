@@ -1,6 +1,8 @@
 from pathlib import Path
 from contextlib import asynccontextmanager
 import logging
+import asyncio
+from contextlib import suppress
 
 from fastapi import FastAPI
 from fastapi.responses import FileResponse
@@ -14,6 +16,9 @@ from app.api.postgres import router as postgres_router
 from app.core.config import settings
 from app.core.middleware import SecurityMiddleware
 from app.services.ollama_service import ollama_service
+from app.services.ai_service import ai_service
+from app.api.workspace import router as workspace_router, media_router
+from app.services.publishing_service import scheduler_loop
 from starlette.exceptions import HTTPException
 from fastapi.responses import JSONResponse
 
@@ -21,8 +26,16 @@ from fastapi.responses import JSONResponse
 @asynccontextmanager
 async def lifespan(app):
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s")
-    yield
-    await ollama_service.close()
+    scheduler = asyncio.create_task(scheduler_loop()) if settings.SCHEDULER_ENABLED else None
+    try:
+        yield
+    finally:
+        if scheduler:
+            scheduler.cancel()
+            with suppress(asyncio.CancelledError):
+                await scheduler
+        await ai_service.close()
+        await ollama_service.close()
 
 
 app = FastAPI(
@@ -33,6 +46,8 @@ app = FastAPI(
     openapi_url="/openapi.json" if settings.APP_ENV == "local" else None,
 )
 app.add_middleware(SecurityMiddleware)
+app.include_router(workspace_router, prefix="/api", tags=["workspace"])
+app.include_router(media_router)
 
 
 @app.exception_handler(HTTPException)

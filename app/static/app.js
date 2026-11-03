@@ -18,10 +18,12 @@ accessForm.addEventListener('submit', event => {
   accessKey = accessForm.querySelector('input').value.trim();
   accessForm.querySelector('input').value = '';
   showToast('Kunci akses aktif untuk tab ini.');
+  document.dispatchEvent(new Event('workspace-identity-changed'));
 });
 accessForm.querySelector('button[type="button"]').addEventListener('click', () => {
   accessKey = '';
   showToast('Kunci akses dihapus.');
+  document.dispatchEvent(new Event('workspace-identity-changed'));
 });
 
 function escapeHtml(value = '') {
@@ -36,7 +38,7 @@ async function api(path, options = {}) {
   const response = await fetch(path, options);
   let body = {};
   try { body = await response.json(); } catch (_) { /* empty response */ }
-  if (!response.ok) throw new Error(body.detail || 'Terjadi kesalahan pada server.');
+  if (!response.ok) throw new Error(Array.isArray(body.detail) ? body.detail.map(item => item.msg).join('; ') : body.detail || 'Terjadi kesalahan pada server.');
   return body;
 }
 

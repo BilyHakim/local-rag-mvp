@@ -1,5 +1,12 @@
 # Local RAG MVP
 
+Sekarang tersedia tiga mode dalam satu aplikasi: **Knowledge / RAG**, **SEO
+Specialist**, dan **Social Media Specialist**. Profil perusahaan dan knowledge
+dipakai bersama. Social Media menyediakan chat/revisi, pembuatan gambar, serta
+planner untuk publikasi materi final yang disetujui melalui API Instagram dan
+WordPress. Panduan konfigurasi API AI/Ollama, gambar, scheduler, dan koneksi kanal:
+[Company AI Workspace](docs/WORKSPACE.md).
+
 Panduan staging terbaru: [Self-hosted staging](docs/STAGING.md). Gunakan
 `compose.staging.yml` untuk API key, tenant isolation, ingestion versioned, hybrid
 Qdrant + BM25, metrics, dan acceptance evaluation. Bagian legacy di bawah menjelaskan

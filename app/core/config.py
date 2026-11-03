@@ -1,5 +1,6 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import model_validator
+from typing import Literal
 
 class Settings(BaseSettings):
     APP_NAME: str = "Local RAG MVP"
@@ -15,6 +16,26 @@ class Settings(BaseSettings):
     RATE_LIMIT_PER_MINUTE: int = 60
     QDRANT_API_KEY: str | None = None
     POSTGRES_ALLOWED_TABLES: list[str] = []
+    AI_PROVIDER: Literal["ollama", "api"] = "ollama"
+    AI_API_BASE_URL: str = "https://api.openai.com/v1"
+    AI_API_KEY: str = ""
+    AI_CHAT_MODEL: str = ""
+    EMBEDDING_PROVIDER: Literal["ollama", "api"] = "ollama"
+    AI_EMBEDDING_MODEL: str = ""
+    IMAGE_API_BASE_URL: str = "https://api.openai.com/v1"
+    IMAGE_API_KEY: str = ""
+    IMAGE_MODEL: str = ""
+    SCHEDULER_ENABLED: bool = False
+    SCHEDULER_INTERVAL_SECONDS: int = 30
+    PUBLIC_BASE_URL: str = ""
+    MEDIA_SIGNING_KEY: str = ""
+    INSTAGRAM_API_VERSION: str = "v25.0"
+    # Per tenant; never accept publishing credentials from model output or request bodies.
+    PUBLISHING_CONNECTIONS: dict[str, dict[str, str]] = {}
+
+    @property
+    def embedding_identity(self) -> str:
+        return self.OLLAMA_EMBEDDING_MODEL if self.EMBEDDING_PROVIDER == "ollama" else f"api:{self.AI_API_BASE_URL}:{self.AI_EMBEDDING_MODEL}"
 
     @model_validator(mode="after")
     def validate_runtime(self):
@@ -24,6 +45,12 @@ class Settings(BaseSettings):
                       self.REQUEST_TIMEOUT, self.RATE_LIMIT_PER_MINUTE):
             if value <= 0:
                 raise ValueError("Runtime limits must be positive")
+        if self.SCHEDULER_INTERVAL_SECONDS < 5:
+            raise ValueError("Scheduler interval must be >= 5 seconds")
+        if self.AI_PROVIDER == "api" and not (self.AI_API_KEY and self.AI_CHAT_MODEL):
+            raise ValueError("AI_API_KEY and AI_CHAT_MODEL required for API text provider")
+        if self.EMBEDDING_PROVIDER == "api" and not (self.AI_API_KEY and self.AI_EMBEDDING_MODEL):
+            raise ValueError("AI_API_KEY and AI_EMBEDDING_MODEL required for API embeddings")
         if self.APP_ENV != "local" and not self.API_KEYS:
             raise ValueError("API_KEYS required outside local mode")
         import re

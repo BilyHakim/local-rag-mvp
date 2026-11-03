@@ -30,7 +30,7 @@ def connection():
 def versions() -> list[str]:
     with connection() as db:
         rows = db.execute("SELECT version, model FROM active WHERE tenant=?", (tenant_context.get(),)).fetchall()
-    if any(model != settings.OLLAMA_EMBEDDING_MODEL for _, model in rows):
+    if any(model != settings.embedding_identity for _, model in rows):
         raise ValueError("Embedding model changed: use a new collection and storage directory, then reindex")
     return [version for version, _ in rows]
 
@@ -46,7 +46,7 @@ def publish(source: str, version: str, records: list[dict]) -> None:
             db.execute("INSERT INTO chunks VALUES (?, ?, ?, ?, ?)",
                        (item["text"], tenant_context.get(), version, item["id"], json.dumps(item)))
         db.execute("INSERT INTO active VALUES (?, ?, ?, ?) ON CONFLICT(tenant, source) DO UPDATE SET version=excluded.version, model=excluded.model",
-                   (tenant_context.get(), source, version, settings.OLLAMA_EMBEDDING_MODEL))
+                   (tenant_context.get(), source, version, settings.embedding_identity))
 
 
 def lexical(query: str, limit: int, active_versions: list[str] | None = None) -> list[dict]:

@@ -17,12 +17,30 @@ router = APIRouter()
 async def ready():
     try:
         await asyncio.wait_for(asyncio.to_thread(qdrant_service.client.get_collections), 10)
-        response = await ollama_service.client.get(f"{ollama_service.base_url}/api/tags", timeout=5)
-        response.raise_for_status()
-        names = {item["name"] for item in response.json().get("models", [])}
-        for name in (ollama_service.chat_model, ollama_service.embedding_model):
-            if name not in names and f"{name}:latest" not in names:
-                raise ValueError("Required model missing")
+        required = []
+        if settings.AI_PROVIDER == "ollama":
+            required.append(ollama_service.chat_model)
+        if settings.EMBEDDING_PROVIDER == "ollama":
+            required.append(ollama_service.embedding_model)
+        if required:
+            response = await ollama_service.client.get(f"{ollama_service.base_url}/api/tags", timeout=5)
+            response.raise_for_status()
+            names = {item["name"] for item in response.json().get("models", [])}
+            for name in required:
+                if name not in names and f"{name}:latest" not in names:
+                    raise ValueError("Required model missing")
+        if settings.AI_PROVIDER == "api" or settings.EMBEDDING_PROVIDER == "api":
+            from app.services.ai_service import ai_service
+            models = []
+            if settings.AI_PROVIDER == "api":
+                models.append(settings.AI_CHAT_MODEL)
+            if settings.EMBEDDING_PROVIDER == "api":
+                models.append(settings.AI_EMBEDDING_MODEL)
+            for model in models:
+                from urllib.parse import quote
+                response = await ai_service.client.get(settings.AI_API_BASE_URL.rstrip("/") + "/models/" + quote(model, safe=""),
+                                                       headers={"Authorization": f"Bearer {settings.AI_API_KEY}"}, timeout=5)
+                response.raise_for_status()
         await asyncio.to_thread(index_manifest.versions)
         if not await asyncio.to_thread(check_ocr_ready):
             raise RuntimeError("OCR unavailable")

@@ -28,11 +28,17 @@ class OllamaService:
         return response.json()
 
     async def generate(self, prompt: str) -> str:
+        if settings.AI_PROVIDER == "api":
+            from app.services.ai_service import ai_service
+            return await ai_service.chat_api("Anda adalah asisten yang membantu.", prompt)
         data = await self._post("generate", {"model": self.chat_model, "prompt": prompt,
                                "stream": False, "options": {"temperature": 0, "num_predict": 512}})
         return data["response"]
 
     async def chat(self, system_prompt: str, user_prompt: str, *, max_tokens: int | None = None) -> str:
+        if settings.AI_PROVIDER == "api":
+            from app.services.ai_service import ai_service
+            return await ai_service.chat_api(system_prompt, user_prompt, max_tokens or 512)
         data = await self._post("chat", {
             "model": self.chat_model, "stream": False,
             "messages": [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}],
@@ -41,8 +47,12 @@ class OllamaService:
         return data["message"]["content"]
 
     async def embed_many(self, texts: list[str]) -> list[list[float]]:
-        data = await self._post("embed", {"model": self.embedding_model, "input": texts, "truncate": False})
-        vectors = data.get("embeddings", [])
+        if settings.EMBEDDING_PROVIDER == "api":
+            from app.services.ai_service import ai_service
+            vectors = await ai_service.embed_api(texts)
+        else:
+            data = await self._post("embed", {"model": self.embedding_model, "input": texts, "truncate": False})
+            vectors = data.get("embeddings", [])
         if (len(vectors) != len(texts) or not vectors or not vectors[0]
                 or any(len(v) != len(vectors[0]) or not all(math.isfinite(x) for x in v) for v in vectors)):
             raise RuntimeError("Invalid embedding response")
