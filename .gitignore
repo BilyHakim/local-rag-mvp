@@ -63,4 +63,13 @@ models/
 Thumbs.db
 desktop.ini
 
-.agents
+# Keep local agent state private; version only the installed anti-slop skills.
+.agents/*
+!.agents/skills/
+.agents/skills/*
+!.agents/skills/antislop/
+!.agents/skills/antislop-ui/
+!.agents/skills/antislop-copywriting/
+!.agents/skills/antislop-human/
+!.agents/skills/antislop-layoutmobile/
+!.agents/skills/antislop-code/
