@@ -201,6 +201,7 @@ async def test_image_generation_persists_jpeg_and_signed_media_is_scoped(monkeyp
     Image.new("RGB", (32, 32), "blue").save(buffer, "PNG")
     monkeypatch.setattr(settings, "IMAGE_API_KEY", "image-secret")
     monkeypatch.setattr(settings, "IMAGE_MODEL", "test-image")
+    monkeypatch.setattr(settings, "IMAGE_API_BASE_URL", "https://images.example.com/v1")
     monkeypatch.setattr(settings, "PUBLIC_BASE_URL", "https://workspace.example.com")
     monkeypatch.setattr(settings, "MEDIA_SIGNING_KEY", "s" * 32)
     client = httpx.AsyncClient(transport=httpx.MockTransport(lambda r: httpx.Response(200, json={"data": [{"b64_json": base64.b64encode(buffer.getvalue()).decode()}]})))
@@ -216,6 +217,82 @@ async def test_image_generation_persists_jpeg_and_signed_media_is_scoped(monkeyp
     assert response.status_code == 200 and response.headers["content-type"] == "image/jpeg"
     response = await client_request("GET", signed.replace("https://workspace.example.com", "").replace("/local/", "/beta/"))
     assert response.status_code == 403
+
+
+async def test_manual_post_and_uploaded_image_require_no_ai(monkeypatch):
+    monkeypatch.setattr(publishing.ai_service, "api_post", AsyncMock(side_effect=AssertionError("No AI calls")))
+    response = await client_request("POST", "/api/workspace/social/posts", json={"channel": "instagram", "caption": "Tes integrasi"})
+    post = response.json()
+    post = store.update("post", post["id"], post["revision"], post, status="scheduled", scheduled_at=store.now_iso())
+    path = f"/api/workspace/social/posts/{post['id']}/image-upload"
+    image = io.BytesIO()
+    Image.new("RGB", (64, 64), "teal").save(image, "PNG")
+    response = await client_request("POST", path, data={"revision": post["revision"]}, files={"file": ("test.png", image.getvalue(), "image/png")})
+    assert response.status_code == 200
+    updated = response.json()
+    assert updated["status"] == "draft" and updated["scheduled_at"] is None
+    assert publishing.image_path(updated["image_id"]).read_bytes().startswith(b"\xff\xd8")
+    response = await client_request("POST", path, data={"revision": post["revision"]}, files={"file": ("test.png", image.getvalue(), "image/png")})
+    assert response.status_code == 409
+    assert len(list(publishing.image_path(updated["image_id"]).parent.glob("*.jpg"))) == 1
+
+
+@pytest.mark.parametrize("content", [b"not an image", b""])
+async def test_upload_rejects_invalid_content(content):
+    post = draft("instagram")
+    response = await client_request("POST", f"/api/workspace/social/posts/{post['id']}/image-upload",
+                                    data={"revision": 1}, files={"file": ("test.jpg", content, "image/jpeg")})
+    assert response.status_code == 409
+    assert store.get("post", post["id"])["revision"] == 1
+
+
+async def test_upload_rejects_other_tenant_and_bad_aspect_ratio():
+    post = draft("instagram")
+    image = io.BytesIO()
+    Image.new("RGB", (10, 100), "blue").save(image, "PNG")
+    with pytest.raises(ValueError, match="Rasio"):
+        await publishing.upload_image(post["id"], 1, image.getvalue())
+    token = tenant_context.set("other")
+    try:
+        with pytest.raises(KeyError):
+            await publishing.upload_image(post["id"], 1, image.getvalue())
+    finally:
+        tenant_context.reset(token)
+
+
+async def test_image_upload_over_256kb_passes_middleware():
+    import random
+    image = io.BytesIO()
+    Image.frombytes("RGB", (512, 512), random.Random(7).randbytes(512 * 512 * 3)).save(image, "PNG")
+    assert len(image.getvalue()) > 256 * 1024
+    post = draft("instagram")
+    response = await client_request("POST", f"/api/workspace/social/posts/{post['id']}/image-upload",
+                                    data={"revision": 1}, files={"file": ("large.png", image.getvalue(), "image/png")})
+    assert response.status_code == 200
+    assert response.json()["image_id"]
+
+
+async def test_image_multipart_limit_does_not_expand_json_limit(monkeypatch):
+    monkeypatch.setattr(settings, "MAX_UPLOAD_BYTES", 1024)
+    post = draft("instagram")
+    response = await client_request("POST", f"/api/workspace/social/posts/{post['id']}/image-upload",
+                                    data={"revision": 1}, files={"file": ("large.png", b"x" * (1024 * 1024 + 2048), "image/png")})
+    assert response.status_code == 413
+    response = await client_request("POST", "/api/workspace/social/posts", content=b"x" * (256 * 1024 + 1))
+    assert response.status_code == 413
+
+
+async def test_instagram_connection_reads_identity_without_publishing(monkeypatch):
+    monkeypatch.setattr(settings, "PUBLISHING_CONNECTIONS", {"local": {"instagram_user_id": "123", "instagram_access_token": "secret", "instagram_login_mode": "unified"}})
+    original = httpx.AsyncClient
+
+    def respond(request):
+        assert request.method == "GET" and request.url.host == "graph.facebook.com"
+        assert request.url.params["fields"] == "id,username"
+        return httpx.Response(200, json={"id": "123", "username": "test-account"})
+
+    monkeypatch.setattr(publishing.httpx, "AsyncClient", lambda **kw: original(transport=httpx.MockTransport(respond), **kw))
+    assert await publishing.instagram_connection() == {"id": "123", "username": "test-account", "connected": True}
 
 
 async def test_api_provider_is_used_for_rag_text_and_embeddings(monkeypatch):
@@ -245,15 +322,17 @@ async def test_api_provider_is_used_for_rag_text_and_embeddings(monkeypatch):
         await client.aclose()
 
 
-async def test_instagram_container_then_publish_and_permalink(monkeypatch):
+@pytest.mark.parametrize("mode,host", [("instagram", "graph.instagram.com"), ("unified", "graph.facebook.com")])
+async def test_instagram_container_then_publish_and_permalink(monkeypatch, mode, host):
     post = draft("instagram")
     post = store.update("post", post["id"], 1, post, status="publishing")
-    monkeypatch.setattr(settings, "PUBLISHING_CONNECTIONS", {"local": {"instagram_user_id": "123", "instagram_access_token": "secret"}})
+    monkeypatch.setattr(settings, "PUBLISHING_CONNECTIONS", {"local": {"instagram_user_id": "123", "instagram_access_token": "secret", "instagram_login_mode": mode}})
     monkeypatch.setattr(publishing, "public_image_url", lambda image_id: "https://example.com/image.jpg")
     post["image_id"] = "a" * 32
     calls = []
 
     def respond(request):
+        assert request.url.host == host
         calls.append(request.url.path)
         if request.url.path.endswith("/media_publish"):
             return httpx.Response(200, json={"id": "456"})

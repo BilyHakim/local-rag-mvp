@@ -135,9 +135,47 @@ dapat mengambil gambar sampai kedaluwarsa. Jangan membagikan URL tersebut di log
 
 ## Instagram API resmi
 
-Implementasi memakai **Instagram Login**, bukan Facebook Login: host
-`graph.instagram.com`, akun Professional Business/Creator, access token Instagram,
-serta izin `instagram_business_basic` dan `instagram_business_content_publish`.
+### Prototype lokal dengan gambar sendiri dan Unified Login
+
+Di Social Media, pilih **Tulis tanpa AI**, isi caption, simpan perubahan, lalu
+unggah PNG/JPEG/WebP melalui **Gambar dari komputer**. Maksimal 10 MB dan 20 MP;
+rasio Instagram 4:5 sampai 1.91:1. Gambar dikonversi menjadi JPEG. Unggah baru
+membatalkan persetujuan dan jadwal, sama seperti pembuatan gambar AI.
+
+Token Unified Login/System User memakai `graph.facebook.com`. Tambahkan
+`"instagram_login_mode":"unified"` pada objek koneksi tenant yang sama dalam
+`PUBLISHING_CONNECTIONS`. Tanpa field ini, konektor lama tetap memakai
+`graph.instagram.com`. Jangan mengganti ID akun dengan ID business portfolio.
+`GET /api/workspace/instagram/connection` memeriksa identitas melalui GET saja;
+keberhasilannya belum membuktikan izin publikasi atau akses URL gambar.
+
+Untuk prototype lokal tanpa domain, unduh executable cloudflared resmi, lalu:
+
+```powershell
+.\.venv\Scripts\python.exe -B scripts/run_instagram_prototype.py --cloudflared storage/tools/cloudflared.exe
+```
+
+Launcher memakai konfigurasi aplikasi tanpa mencetak secret, memilih Unified Login
+untuk koneksi `local`, mematikan scheduler, memeriksa identitas, dan membuat draft
+uji dengan `assets/instagram/thumbnail-tes-integrasi.png` satu kali. Tidak ada
+panggilan LLM atau gambar AI. UI tersedia di port 8011; tunnel hanya membuka
+gateway media di 8012, bukan UI/API. URL publik dan signing key diatur di memori
+proses; `.env` tidak diubah. Endpoint publik lain mengembalikan 404. Tutup proses
+untuk menutup tunnel. Token tetap hanya di server. Quick Tunnel adalah fasilitas
+pengujian sementara, bukan deployment produksi.
+
+Di UI, buka draft **Tes integrasi Instagram** di planner, periksa materi, klik
+**Setujui versi ini**, lalu **Terbitkan sekarang**. Post dengan status `published`
+tidak dipublikasikan ulang saat launcher dijalankan lagi. Jika `uncertain`, periksa
+akun Instagram dan rekonsiliasi sebelum mencoba lagi.
+
+Sumber tunnel: [Cloudflare Quick Tunnels](https://developers.cloudflare.com/tunnel/get-started/quick-tunnels/).
+
+Konektor mendukung **Instagram Login** (bawaan, `graph.instagram.com`) dan
+**Unified Login** (`instagram_login_mode=unified`, `graph.facebook.com`).
+Instagram Login memakai access token Instagram serta izin `instagram_business_basic`
+dan `instagram_business_content_publish`. Unified Login memakai token Business
+Integration System User dengan `instagram_basic` dan `instagram_content_publish`.
 Selesaikan setup aplikasi Meta dan akses/peninjauan yang sesuai dengan akun yang
 dikelola. Aplikasi ini belum menyediakan OAuth onboarding atau refresh token;
 token aktif disediakan dan diperbarui oleh operator di konfigurasi server.

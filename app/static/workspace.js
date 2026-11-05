@@ -133,6 +133,9 @@
     const editable = !!selected && ['draft', 'approved', 'scheduled', 'failed'].includes(selected.status);
     qs('#saveDraft').disabled = busy || !editable || !dirty;
     qs('#generateImage').disabled = busy || !editable || dirty;
+    qs('#postImageFile').disabled = busy || !editable || dirty;
+    qs('#uploadPostImage').disabled = busy || !editable || dirty;
+    qs('#manualSocial').disabled = busy;
     qs('#approvePost').disabled = busy || dirty || !selected || !['draft', 'failed'].includes(selected.status);
     qs('#publishPost').disabled = busy || dirty || selected?.status !== 'approved';
     qs('#schedulePost').disabled = busy || dirty || selected?.status !== 'approved';
@@ -174,6 +177,30 @@
     if (button.dataset.socialTab === 'planner') loadPosts().catch(e => showToast(e.message));
   }));
   qs('#newSocial').addEventListener('click', () => { resetPost(); tab('manual'); });
+  qs('#manualSocial').addEventListener('click', event => {
+    if (dirty) { showToast('Simpan perubahan editor sebelum membuat draft baru.'); return; }
+    run(event.currentTarget, async epoch => {
+      const post = await api(base + '/social/posts', json({ channel: qs('#socialForm').elements.channel.value }));
+      if (epoch !== identityEpoch) return;
+      await renderPost(post); await loadPosts();
+      showToast('Draft dibuat tanpa AI. Isi caption, simpan, lalu unggah gambar.');
+    });
+  });
+  qs('#imageUploadForm').addEventListener('submit', event => {
+    event.preventDefault();
+    if (!selected || dirty) return;
+    const file = qs('#postImageFile').files[0];
+    if (!file) return;
+    if (file.size > 10 * 1024 * 1024) { showToast('Gambar maksimal 10 MB.'); return; }
+    run(event.submitter, async epoch => {
+      const body = new FormData();
+      body.append('file', file); body.append('revision', String(selected.revision));
+      const post = await api(`${base}/social/posts/${selected.id}/image-upload`, { method: 'POST', body });
+      if (epoch !== identityEpoch) return;
+      event.target.reset(); await renderPost(post); await loadPosts();
+      showToast('Gambar diunggah. Tinjau dan setujui versi ini sebelum menerbitkan.');
+    });
+  });
   qs('#postEditor').addEventListener('input', () => { dirty = true; refreshActions(); });
 
   qs('#socialForm').addEventListener('submit', event => {

@@ -220,6 +220,7 @@
                 <label class="field"><span>Brief atau arahan revisi</span><textarea name="brief" rows="6" minlength="3" maxlength="8000" required placeholder="Tuliskan tema, target audiens, pesan utama, dan gaya bahasa yang Anda inginkan."></textarea></label>
                 <label class="workspace-check"><input name="use_knowledge" type="checkbox" checked> Gunakan knowledge perusahaan</label>
                 <button class="primary-button" type="submit" id="generateSocial">Buat draft konten</button>
+                <button class="workspace-button" type="button" id="manualSocial">Tulis tanpa AI</button>
               </form>
               <div id="socialNotes" class="workspace-notes" aria-live="polite"></div>
             </div>
@@ -232,7 +233,12 @@
                 <label class="field"><span>Brief gambar</span><textarea name="image_prompt" maxlength="4000" rows="4"></textarea></label>
                 <button class="workspace-button" type="submit" id="saveDraft" disabled>Simpan perubahan</button>
               </form>
-              <div class="image-preview"><img id="socialImage" class="social-image" alt="Preview gambar konten" width="1024" height="1024" hidden><p id="imageEmpty">Pratinjau gambar akan muncul setelah Anda membuat visual dari brief gambar.</p></div>
+              <div class="image-preview"><img id="socialImage" class="social-image" alt="Preview gambar konten" width="1024" height="1024" hidden><p id="imageEmpty">Unggah gambar sendiri atau buat gambar dari brief untuk melihat pratinjau.</p></div>
+              <form id="imageUploadForm" class="workspace-form">
+                <label class="field"><span>Gambar dari komputer</span><input id="postImageFile" name="file" type="file" accept="image/png,image/jpeg,image/webp" aria-describedby="imageUploadHelp" required disabled></label>
+                <p id="imageUploadHelp" class="empty-note">PNG, JPEG, atau WebP, maksimal 10 MB. Instagram menerima rasio 4:5 sampai 1.91:1. Unggah gambar membatalkan persetujuan dan jadwal.</p>
+                <button type="submit" class="workspace-button" id="uploadPostImage" disabled>Unggah gambar</button>
+              </form>
               <button type="button" class="workspace-button" id="generateImage" disabled>Buat gambar konten</button>
               <p id="postMessage" class="empty-note" role="status">Buat draft untuk mulai mengedit dan menyiapkan publikasi.</p>
               <details class="publication-section" id="publicationSection"><summary>Publikasi &amp; jadwal</summary>

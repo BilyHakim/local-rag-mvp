@@ -1,5 +1,12 @@
 # Workspace design direction
 
+Manual Instagram prototype: keep ENERGY 2 / RHYTHM 2 / MOTION 1. Place a native,
+visibly labelled image picker beside the existing preview, with the same quiet
+secondary button style as Save. This groups image selection with its result and
+keeps publishing as the deliberate final action. "Tulis tanpa AI" creates a
+draft without spending provider credits. Upload states follow draft editability;
+errors use the existing toast and successful uploads refresh the reserved preview.
+
 The RAG composer puts model, refresh, source count, and send in one bottom toolbar.
 Its 24px outer corners soften the writing surface; smaller 10px controls preserve
 hierarchy. Model and source inputs use theme input colors, refresh is a quiet

@@ -102,7 +102,14 @@ def main():
             response["history"] = previous.get("history", []) + [{"instruction": data["brief"], "result": deepcopy(response)}]
             state["posts"][post_id] = response
         elif path.endswith("/social/posts"):
-            response = list(state["posts"].values())
+            if request.method == "POST":
+                post_id = "b" * 32
+                response = {"id": post_id, "revision": 1, "status": "draft", "channel": data["channel"],
+                            "title": "Draft baru", "caption": "", "image_prompt": "", "hashtags": [],
+                            "history": [], "warnings": [], "sources": [], "notes": "", "image_id": None}
+                state["posts"][post_id] = response
+            else:
+                response = list(state["posts"].values())
         elif "/social/posts/" in path:
             parts = path.split("/social/posts/")[1].split("/")
             post = state["posts"][parts[0]]
@@ -115,7 +122,7 @@ def main():
                 if not action:
                     post.update({k: v for k, v in data.items() if k != "revision"})
                     post["status"] = "draft"
-                elif action == "image":
+                elif action in {"image", "image-upload"}:
                     post.update(image_id="c" * 32, status="draft")
                 elif action == "approve":
                     post["status"] = "approved"
@@ -215,6 +222,22 @@ def main():
         expect(page.locator("#toast")).to_contain_text("tersimpan")
         log.append("Company profile: save with fixture API succeeds")
         nav("social")
+        page.locator("#manualSocial").focus()
+        page.keyboard.press("Enter")
+        expect(page.locator("#postStatus")).to_contain_text("Draft")
+        page.locator('#postEditor [name="caption"]').fill("[Data uji] Unggah gambar tanpa AI")
+        page.locator("#saveDraft").click()
+        page.locator("#postImageFile").set_input_files({"name": "fixture.jpg", "mimeType": "image/jpeg", "buffer": buffer.getvalue()})
+        page.locator("#uploadPostImage").click()
+        expect(page.locator("#socialImage")).to_be_visible()
+        check_layout("social-upload-desktop")
+        page.screenshot(path=str(output / "social-upload-desktop.png"), full_page=True)
+        page.set_viewport_size({"width": 360, "height": 1000})
+        check_layout("social-upload-mobile")
+        page.screenshot(path=str(output / "social-upload-mobile.png"), full_page=True)
+        page.set_viewport_size({"width": 1440, "height": 1000})
+        page.locator("#newSocial").click()
+        log.append("Manual draft: keyboard activation, edit/save, file upload, preview on desktop/mobile; no AI request")
         page.locator(".workspace-status summary").filter(visible=True).click()
         expect(page.locator("#socialView .connection-items")).to_contain_text("model-uji")
         page.locator('#socialForm [name="channel"]').select_option("website")
@@ -242,7 +265,7 @@ def main():
         expect(page.locator("#postStatus")).to_contain_text("Terbit")
         page.locator('[data-social-tab="planner"]').click()
         page.locator("#refreshPlanner").click()
-        page.locator("[data-post-id]").click()
+        page.locator('[data-post-id="' + "a" * 32 + '"]').click()
         page.locator("#newSocial").click()
         expect(page.locator("#postStatus")).to_have_text("Belum ada draft")
         log.append("Social: channel, brief, generate, edit/save, revise, image, approve, schedule, cancel, publish/uncertain, reconcile, planner, refresh, open, new")

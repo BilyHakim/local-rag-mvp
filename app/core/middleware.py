@@ -2,6 +2,7 @@ import asyncio
 import hmac
 import json
 import logging
+import re
 import time
 from collections import defaultdict, deque
 from uuid import uuid4
@@ -84,7 +85,12 @@ class SecurityMiddleware:
 
         async def run():
             # Bound memory before multipart/JSON parsing, including chunked requests.
-            limit = settings.MAX_UPLOAD_BYTES + 1024 * 1024 if path == "/api/documents/upload" else 256 * 1024
+            if path == "/api/documents/upload":
+                limit = settings.MAX_UPLOAD_BYTES + 1024 * 1024
+            elif re.fullmatch(r"/api/workspace/social/posts/[a-f0-9]{32}/image-upload", path):
+                limit = min(settings.MAX_UPLOAD_BYTES, 10 * 1024 * 1024) + 1024 * 1024
+            else:
+                limit = 256 * 1024
             chunks, length = [], 0
             while True:
                 message = await receive()

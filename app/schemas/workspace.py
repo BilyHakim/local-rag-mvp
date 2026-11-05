@@ -58,6 +58,12 @@ class PostEdit(BaseModel):
     hashtags: list[str] = Field(default_factory=list, max_length=20)
 
 
+class ManualPostRequest(BaseModel):
+    channel: Literal["instagram", "website"] = "instagram"
+    title: str = Field(default="Draft baru", min_length=1, max_length=200)
+    caption: str = Field(default="", max_length=12000)
+
+
 class RevisionRequest(BaseModel):
     revision: int = Field(ge=1)
 

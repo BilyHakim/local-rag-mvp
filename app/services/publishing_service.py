@@ -28,6 +28,63 @@ def connections():
     return settings.PUBLISHING_CONNECTIONS.get(tenant_context.get(), {})
 
 
+def instagram_base():
+    mode = connections().get("instagram_login_mode", "instagram")
+    hosts = {"instagram": "graph.instagram.com", "unified": "graph.facebook.com"}
+    if mode not in hosts:
+        raise ValueError("instagram_login_mode harus instagram atau unified")
+    return f"https://{hosts[mode]}/{settings.INSTAGRAM_API_VERSION}"
+
+
+async def instagram_connection():
+    config = connections()
+    account = config.get("instagram_user_id", "")
+    if not account.isdigit() or not config.get("instagram_access_token"):
+        raise ValueError("Koneksi Instagram tenant ini belum dikonfigurasi")
+    async with httpx.AsyncClient(timeout=15, trust_env=False) as client:
+        result = await client.get(f"{instagram_base()}/{account}",
+                                  headers={"Authorization": f"Bearer {config['instagram_access_token']}"},
+                                  params={"fields": "id,username"})
+        result.raise_for_status()
+        data = result.json()
+    return {"id": data["id"], "username": data["username"], "connected": True}
+
+
+async def upload_image(post_id, revision, raw):
+    post = await asyncio.to_thread(store.get, "post", post_id)
+    allowed = {"draft", "approved", "scheduled", "failed"}
+    if post["revision"] != revision or post["status"] not in allowed:
+        raise ValueError("Muat ulang draft sebelum mengunggah gambar")
+    if not raw or len(raw) > min(settings.MAX_UPLOAD_BYTES, 10 * 1024 * 1024):
+        raise ValueError("Gambar maksimal 10 MB dan tidak boleh kosong")
+    image_id = uuid4().hex
+    path = image_path(image_id)
+
+    def save():
+        try:
+            with Image.open(io.BytesIO(raw)) as image:
+                if image.format not in {"PNG", "JPEG", "WEBP"}:
+                    raise ValueError("Gunakan gambar PNG, JPEG, atau WebP")
+                if image.width * image.height > 20_000_000:
+                    raise ValueError("Gambar maksimal 20 megapiksel")
+                ratio = image.width / image.height
+                if post["channel"] == "instagram" and not 0.8 <= ratio <= 1.91:
+                    raise ValueError("Rasio gambar Instagram harus antara 4:5 dan 1.91:1")
+                image.load()
+                path.parent.mkdir(parents=True, exist_ok=True)
+                image.convert("RGB").save(path, "JPEG", quality=90)
+        except (OSError, Image.DecompressionBombError) as exc:
+            raise ValueError("File gambar tidak valid atau rusak") from exc
+
+    try:
+        await asyncio.to_thread(save)
+        return await asyncio.to_thread(store.update, "post", post_id, revision,
+                                       dict(post, image_id=image_id, error=None), allowed=allowed)
+    except BaseException:
+        path.unlink(missing_ok=True)
+        raise
+
+
 def image_path(image_id, tenant=None):
     tenant = tenant or tenant_context.get()
     if not re.fullmatch(r"[a-z0-9_-]{1,48}", tenant) or not re.fullmatch(r"[a-f0-9]{32}", image_id or ""):
@@ -101,6 +158,7 @@ def validate_publishable(post):
     if not post.get("title", "").strip() or not post.get("caption", "").strip():
         raise ValueError("Judul dan konten wajib diisi")
     if post["channel"] == "instagram":
+        instagram_base()
         if not config.get("instagram_user_id", "").isdigit() or not config.get("instagram_access_token"):
             raise ValueError("Koneksi Instagram tenant ini belum dikonfigurasi")
         if len(full_caption(post)) > 2200:
@@ -120,7 +178,7 @@ def validate_publishable(post):
 
 async def publish_instagram(post):
     config = connections()
-    base = f"https://graph.instagram.com/{settings.INSTAGRAM_API_VERSION}"
+    base = instagram_base()
     account = config["instagram_user_id"]
     headers = {"Authorization": f"Bearer {config['instagram_access_token']}"}
     async with httpx.AsyncClient(timeout=30, trust_env=False) as client:

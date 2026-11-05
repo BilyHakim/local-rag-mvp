@@ -1,17 +1,17 @@
 import asyncio
 
 import httpx
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request, UploadFile, File, Form
 from fastapi.responses import FileResponse
 from fastapi.routing import APIRoute
 
 from app.core.config import settings
 from app.schemas.workspace import (BrandProfile, AuditRequest, GenerateRequest, PostEdit,
-                                   RevisionRequest, ScheduleRequest, ResolveRequest)
+                                   RevisionRequest, ScheduleRequest, ResolveRequest, ManualPostRequest)
 from app.services import workspace_store as store
 from app.services.specialist_service import audit_url, generate_social
 from app.services.publishing_service import (connections, generate_image, image_path, publish_post,
-                                             validate_publishable, validate_signature)
+                                   validate_publishable, validate_signature, upload_image, instagram_connection)
 
 
 class WorkspaceRoute(APIRoute):
@@ -53,6 +53,17 @@ async def profile():
         return await asyncio.to_thread(store.get, "profile", "brand")
     except KeyError:
         return BrandProfile()
+
+
+@router.get("/instagram/connection")
+async def check_instagram_connection():
+    return await instagram_connection()
+
+
+@router.post("/social/posts")
+async def manual_post(payload: ManualPostRequest):
+    return await asyncio.to_thread(store.create, "post", dict(payload.model_dump(),
+                                  image_prompt="", hashtags=[], notes="", history=[], sources=[], warnings=[]))
 
 
 @router.put("/profile", response_model=BrandProfile)
@@ -111,6 +122,15 @@ async def preview_image(record_id: str):
     if not path.is_file():
         raise HTTPException(404, "Gambar belum tersedia")
     return FileResponse(path, media_type="image/jpeg")
+
+
+@router.post("/social/posts/{record_id}/image-upload")
+async def upload_post_image(record_id: str, revision: int = Form(..., ge=1), file: UploadFile = File(...)):
+    try:
+        raw = await file.read(min(settings.MAX_UPLOAD_BYTES, 10 * 1024 * 1024) + 1)
+        return await upload_image(record_id, revision, raw)
+    finally:
+        await file.close()
 
 
 @router.post("/social/posts/{record_id}/approve")
