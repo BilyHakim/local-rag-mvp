@@ -17,6 +17,7 @@ from app.core.config import settings
 from app.core.middleware import SecurityMiddleware
 from app.services.ollama_service import ollama_service
 from app.services.ai_service import ai_service, AIProviderError
+from app.services.rag_errors import RagDependencyError
 from app.api.workspace import router as workspace_router, media_router
 from app.services.publishing_service import scheduler_loop
 from starlette.exceptions import HTTPException
@@ -65,6 +66,13 @@ async def sanitized_error(request, exc):
         logging.getLogger("http").error("api_error status=%d error_type=%s", exc.status_code, type(cause).__name__)
     return JSONResponse(status_code=exc.status_code,
                         content={"detail": "Layanan belum dapat memproses request" if exc.status_code >= 500 else exc.detail})
+
+
+@app.exception_handler(RagDependencyError)
+async def rag_dependency_error(request, exc):
+    logging.getLogger("http").error("rag_dependency_failed service=%s", exc.service)
+    return JSONResponse(status_code=503,
+                        content={"detail": exc.detail, "code": "rag_dependency_unavailable", "service": exc.service})
 
 static_dir = Path(__file__).parent / "static"
 app.mount("/static", StaticFiles(directory=static_dir), name="static")

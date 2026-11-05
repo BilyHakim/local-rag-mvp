@@ -18,15 +18,15 @@ Dokumentasi ini disusun dari implementasi di repository. Sumber konfigurasi utam
 
 ## Komponen
 
-| Komponen | Fungsi | Sumber implementasi |
-| --- | --- | --- |
-| FastAPI | API dan penyaji UI | `app/main.py` |
-| Ollama | Chat completion dan embedding | `app/services/ollama_service.py` |
-| Qdrant | Penyimpanan dan pencarian vector | `app/services/qdrant_service.py` |
-| PostgreSQL | Sumber knowledge opsional | `app/services/postgres_service.py` |
-| PyMuPDF + Tesseract | Ekstraksi PDF dan OCR opsional | `app/services/pdf_service.py` |
-| python-docx | Ekstraksi DOCX | `app/services/docx_service.py` |
-| openpyxl / xlrd | Ekstraksi XLSX dan XLS | `app/services/spreadsheet_service.py` |
+| Komponen            | Fungsi                           | Sumber implementasi                     |
+| ------------------- | -------------------------------- | --------------------------------------- |
+| FastAPI             | API dan penyaji UI               | `app/main.py`                         |
+| Ollama              | Chat completion dan embedding    | `app/services/ollama_service.py`      |
+| Qdrant              | Penyimpanan dan pencarian vector | `app/services/qdrant_service.py`      |
+| PostgreSQL          | Sumber knowledge opsional        | `app/services/postgres_service.py`    |
+| PyMuPDF + Tesseract | Ekstraksi PDF dan OCR opsional   | `app/services/pdf_service.py`         |
+| python-docx         | Ekstraksi DOCX                   | `app/services/docx_service.py`        |
+| openpyxl / xlrd     | Ekstraksi XLSX dan XLS           | `app/services/spreadsheet_service.py` |
 
 UI disajikan langsung oleh FastAPI. Tidak ada proses build frontend atau dependency Node.js untuk menjalankan aplikasi.
 
@@ -102,9 +102,9 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
 Kemudian buka:
 
-- UI: <http://localhost:8000>
-- Swagger UI: <http://localhost:8000/docs>
-- Health endpoint: <http://localhost:8000/api/health>
+- UI: [http://localhost:8000](http://localhost:8000)
+- Swagger UI: [http://localhost:8000/docs](http://localhost:8000/docs)
+- Health endpoint: [http://localhost:8000/api/health](http://localhost:8000/api/health)
 
 `APP_HOST` dan `APP_PORT` tersedia di settings, tetapi `app/main.py` tidak menjalankan Uvicorn secara langsung. Saat memakai CLI, host dan port tetap harus diberikan sebagai argumen seperti contoh di atas.
 
@@ -153,34 +153,34 @@ Collection `local_knowledge` dibuat otomatis ketika data pertama kali di-upsert 
 
 Semua konfigurasi dibaca dari `.env` oleh `pydantic-settings`.
 
-| Variabel | Default di source | Keterangan |
-| --- | --- | --- |
-| `APP_NAME` | `Local RAG MVP` | Nama aplikasi dan nilai pada health response. |
-| `APP_ENV` | `local` | Nama environment pada health response. |
-| `APP_HOST` | `0.0.0.0` | Nilai konfigurasi host; tidak otomatis dipakai Uvicorn CLI. |
-| `APP_PORT` | `8000` | Nilai konfigurasi port; tidak otomatis dipakai Uvicorn CLI. |
-| `OLLAMA_BASE_URL` | `http://localhost:11434` | Base URL Ollama. |
-| `OLLAMA_CHAT_MODEL` | `qwen2.5:3b` | Model untuk chat dasar dan jawaban RAG. |
-| `OLLAMA_EMBEDDING_MODEL` | `nomic-embed-text` | Model embedding untuk indexing dan pencarian. |
-| `QDRANT_URL` | `http://localhost:6333` | URL Qdrant. |
-| `QDRANT_COLLECTION` | `local_knowledge` | Nama collection vector. |
-| `RAG_SCORE_THRESHOLD` | `0.45` | Batas score hasil vector sebelum menjadi konteks, kecuali ada entity code yang cocok. |
-| `STORAGE_DIR` | `storage` | Direktori file upload. Tidak dicantumkan di `.env.example`. |
-| `CHUNK_SIZE` | `900` | Panjang maksimum chunk dalam karakter. |
-| `CHUNK_OVERLAP` | `150` | Overlap antar-chunk dalam karakter. |
-| `OCR_ENABLED` | `true` | Mengaktifkan fallback OCR untuk halaman PDF dengan sedikit teks. |
-| `OCR_LANG` | `eng+ind` | Bahasa yang diteruskan ke Tesseract. |
-| `OCR_DPI` | `200` | Resolusi render halaman sebelum OCR. |
-| `OCR_MIN_TEXT_LENGTH` | `20` | OCR dijalankan jika teks native lebih pendek dari nilai ini. |
-| `TESSERACT_CMD` | kosong | Path executable Tesseract; `.env.example` memberi contoh Windows. |
-| `TESSDATA_DIR` | kosong | Direktori data bahasa Tesseract bila tidak dipasang di lokasi bawaan. |
-| `POSTGRES_ENABLED` | `false` | Mengaktifkan endpoint PostgreSQL; `.env.example` mengisinya `true`. |
-| `POSTGRES_HOST` | `localhost` | Host PostgreSQL. |
-| `POSTGRES_PORT` | `5432` | Port PostgreSQL. |
-| `POSTGRES_DB` | `seamon-local-ipc-db` | Nama database. |
-| `POSTGRES_USER` | `postgres` | User PostgreSQL. |
-| `POSTGRES_PASSWORD` | kosong | Password PostgreSQL. |
-| `POSTGRES_SCHEMA` | `public` | Schema yang didaftarkan dan disinkronkan. |
+| Variabel                   | Default di source          | Keterangan                                                                            |
+| -------------------------- | -------------------------- | ------------------------------------------------------------------------------------- |
+| `APP_NAME`               | `Local RAG MVP`          | Nama aplikasi dan nilai pada health response.                                         |
+| `APP_ENV`                | `local`                  | Nama environment pada health response.                                                |
+| `APP_HOST`               | `0.0.0.0`                | Nilai konfigurasi host; tidak otomatis dipakai Uvicorn CLI.                           |
+| `APP_PORT`               | `8000`                   | Nilai konfigurasi port; tidak otomatis dipakai Uvicorn CLI.                           |
+| `OLLAMA_BASE_URL`        | `http://localhost:11434` | Base URL Ollama.                                                                      |
+| `OLLAMA_CHAT_MODEL`      | `qwen2.5:3b`             | Model untuk chat dasar dan jawaban RAG.                                               |
+| `OLLAMA_EMBEDDING_MODEL` | `nomic-embed-text`       | Model embedding untuk indexing dan pencarian.                                         |
+| `QDRANT_URL`             | `http://localhost:6333`  | URL Qdrant.                                                                           |
+| `QDRANT_COLLECTION`      | `local_knowledge`        | Nama collection vector.                                                               |
+| `RAG_SCORE_THRESHOLD`    | `0.45`                   | Batas score hasil vector sebelum menjadi konteks, kecuali ada entity code yang cocok. |
+| `STORAGE_DIR`            | `storage`                | Direktori file upload. Tidak dicantumkan di `.env.example`.                         |
+| `CHUNK_SIZE`             | `900`                    | Panjang maksimum chunk dalam karakter.                                                |
+| `CHUNK_OVERLAP`          | `150`                    | Overlap antar-chunk dalam karakter.                                                   |
+| `OCR_ENABLED`            | `true`                   | Mengaktifkan fallback OCR untuk halaman PDF dengan sedikit teks.                      |
+| `OCR_LANG`               | `eng+ind`                | Bahasa yang diteruskan ke Tesseract.                                                  |
+| `OCR_DPI`                | `200`                    | Resolusi render halaman sebelum OCR.                                                  |
+| `OCR_MIN_TEXT_LENGTH`    | `20`                     | OCR dijalankan jika teks native lebih pendek dari nilai ini.                          |
+| `TESSERACT_CMD`          | kosong                     | Path executable Tesseract; `.env.example` memberi contoh Windows.                   |
+| `TESSDATA_DIR`           | kosong                     | Direktori data bahasa Tesseract bila tidak dipasang di lokasi bawaan.                 |
+| `POSTGRES_ENABLED`       | `false`                  | Mengaktifkan endpoint PostgreSQL; `.env.example` mengisinya `true`.               |
+| `POSTGRES_HOST`          | `localhost`              | Host PostgreSQL.                                                                      |
+| `POSTGRES_PORT`          | `5432`                   | Port PostgreSQL.                                                                      |
+| `POSTGRES_DB`            | `seamon-local-ipc-db`    | Nama database.                                                                        |
+| `POSTGRES_USER`          | `postgres`               | User PostgreSQL.                                                                      |
+| `POSTGRES_PASSWORD`      | kosong                     | Password PostgreSQL.                                                                  |
+| `POSTGRES_SCHEMA`        | `public`                 | Schema yang didaftarkan dan disinkronkan.                                             |
 
 `CHUNK_SIZE` harus lebih besar daripada `CHUNK_OVERLAP`. Fungsi chunking menggeser posisi berikutnya dengan `end - overlap`; overlap yang sama atau lebih besar dapat membuat proses tidak maju.
 
@@ -314,18 +314,18 @@ Nama schema dan tabel hanya menerima huruf, angka, dan underscore serta tidak bo
 
 Semua endpoint API memakai prefix `/api`.
 
-| Method | Path | Fungsi |
-| --- | --- | --- |
-| `GET` | `/api/health` | Status proses FastAPI. |
-| `POST` | `/api/chat-basic` | Chat langsung ke Ollama tanpa RAG. |
-| `POST` | `/api/embedding-test` | Membuat embedding dan menampilkan sampel. |
-| `POST` | `/api/chat-rag` | Menjawab dengan context dari Qdrant. |
-| `POST` | `/api/knowledge` | Menambah knowledge manual. |
-| `POST` | `/api/knowledge/search` | Vector search pada knowledge. |
-| `POST` | `/api/documents/upload` | Upload dan indexing dokumen. |
-| `POST` | `/api/postgres/test-connection` | Menguji koneksi PostgreSQL. |
-| `POST` | `/api/postgres/tables` | Mengambil daftar base table. |
-| `POST` | `/api/postgres/sync` | Mengindeks tabel PostgreSQL. |
+| Method   | Path                              | Fungsi                                    |
+| -------- | --------------------------------- | ----------------------------------------- |
+| `GET`  | `/api/health`                   | Status proses FastAPI.                    |
+| `POST` | `/api/chat-basic`               | Chat langsung ke Ollama tanpa RAG.        |
+| `POST` | `/api/embedding-test`           | Membuat embedding dan menampilkan sampel. |
+| `POST` | `/api/chat-rag`                 | Menjawab dengan context dari Qdrant.      |
+| `POST` | `/api/knowledge`                | Menambah knowledge manual.                |
+| `POST` | `/api/knowledge/search`         | Vector search pada knowledge.             |
+| `POST` | `/api/documents/upload`         | Upload dan indexing dokumen.              |
+| `POST` | `/api/postgres/test-connection` | Menguji koneksi PostgreSQL.               |
+| `POST` | `/api/postgres/tables`          | Mengambil daftar base table.              |
+| `POST` | `/api/postgres/sync`            | Mengindeks tabel PostgreSQL.              |
 
 Schema request dan response lengkap tersedia di `/docs` dan `app/schemas`.
 

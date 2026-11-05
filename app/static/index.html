@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="Workspace untuk knowledge perusahaan, audit SEO, dan produksi konten social media.">
   <title>Company AI Workspace</title>
-  <link rel="stylesheet" href="/static/styles.css?v=9">
+  <link rel="stylesheet" href="/static/styles.css?v=11">
 </head>
 <body>
   <a class="skip-link" href="#mainContent">Langsung ke area kerja</a>
@@ -92,14 +92,27 @@
           </div>
 
           <form class="composer" id="chatForm">
-            <label for="questionInput">Pertanyaan Anda</label>
+            <div class="composer-heading">
+              <label for="questionInput">Pertanyaan Anda</label>
+              <button type="button" class="composer-icon" id="resizeComposer" aria-label="Perbesar kotak pertanyaan" title="Perbesar kotak pertanyaan" aria-expanded="false" aria-controls="questionInput">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6M20 4l-7 7M10 20H4v-6M4 20l7-7"/></svg>
+              </button>
+            </div>
             <textarea id="questionInput" rows="1" maxlength="4000" placeholder="Tanyakan sesuatu tentang dokumen Anda..." aria-label="Pertanyaan" required></textarea>
             <div class="composer-actions">
+              <div class="model-controls">
+                <label for="llmModel">Model</label>
+                <select id="llmModel" aria-describedby="modelStatus" disabled><option value="">Default server</option></select>
+                <button type="button" class="composer-icon" id="refreshModels" aria-label="Muat ulang model" title="Muat ulang model">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5"/><path d="M6.1 7a7 7 0 0 1 11.6-1L20 9M4 15l2.3 3A7 7 0 0 0 17.9 17"/></svg>
+                </button>
+              </div>
               <label class="top-k">Sumber <select id="topK" aria-label="Jumlah sumber"><option value="3">3</option><option value="5" selected>5</option><option value="10">10</option></select></label>
               <button class="send-button" type="submit" id="sendButton" aria-label="Kirim pertanyaan">
                 <span>Kirim</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 14-7-4 14-3-6-7-1Z"/><path d="m12 13 7-8"/></svg>
               </button>
             </div>
+            <p class="model-status" id="modelStatus" role="status">Memuat daftar model...</p>
             <p class="composer-hint">Enter untuk mengirim · Shift + Enter untuk baris baru</p>
           </form>
         </div>
@@ -248,7 +261,7 @@
     </main>
   </div>
   <div class="toast" id="toast" role="status"></div>
-  <script src="/static/app.js?v=5"></script>
+  <script src="/static/app.js?v=7"></script>
   <script src="/static/workspace.js?v=2"></script>
 </body>
 </html>

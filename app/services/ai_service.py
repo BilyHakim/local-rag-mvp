@@ -25,6 +25,13 @@ class AIProviderError(Exception):
         super().__init__(self.detail)
 
 
+class AIResponseError(AIProviderError):
+    def __init__(self, detail: str):
+        super().__init__(502)
+        self.detail = detail
+        self.args = (detail,)
+
+
 class AIService:
     def __init__(self):
         self._client = None
@@ -40,22 +47,30 @@ class AIService:
             await self._client.aclose()
 
     async def chat_api(self, system: str, user: str, max_tokens: int = 2048) -> str:
-        payload = {"model": settings.AI_CHAT_MODEL,
+        from app.services.model_service import chat_model_context
+        payload = {"model": chat_model_context.get() or settings.AI_CHAT_MODEL,
                    "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
                    "max_completion_tokens": max_tokens}
-        if urlsplit(settings.AI_API_BASE_URL).hostname == "generativelanguage.googleapis.com":
+        host = urlsplit(settings.AI_API_BASE_URL).hostname
+        if host == "generativelanguage.googleapis.com":
             # Gemini rejects store; reasoning tokens also share the completion budget.
             payload["max_completion_tokens"] = max(max_tokens, 4096)
             payload["reasoning_effort"] = "low"
         else:
             payload["store"] = False
+        if host == "api.commandcode.ai":
+            # RAG's 8/64-token checks also need room for provider reasoning.
+            payload["max_completion_tokens"] = max(max_tokens, 4096)
+            model = payload["model"].split("/")[-1].lower()
+            if model.startswith(("gpt-5", "gpt-6", "gemini-")):
+                payload["reasoning_effort"] = "low"
         response = await self.api_post("/chat/completions", payload)
         choice = response.json()["choices"][0]
         if choice.get("finish_reason") == "length":
-            raise ValueError("Respons model terpotong; gunakan batas output/model yang sesuai")
+            raise AIResponseError("Respons AI terpotong karena batas token. Coba kembali atau pilih model lain.")
         content = choice["message"].get("content")
         if not isinstance(content, str) or not content.strip():
-            raise ValueError("Model tidak menghasilkan teks")
+            raise AIResponseError("Model AI tidak menghasilkan teks jawaban. Coba kembali atau pilih model lain.")
         return content
 
     async def api_post(self, path: str, payload: dict):

@@ -2,6 +2,9 @@ import re
 import asyncio
 import logging
 import time
+import httpx
+from qdrant_client.http.exceptions import ResponseHandlingException
+from app.services.rag_errors import RagDependencyError
 from app.services import index_manifest
 from app.core.config import settings
 from app.services.ollama_service import ollama_service
@@ -11,6 +14,13 @@ from app.services.text_cleanup_service import strip_answer_ocr_noise
 rag_metrics = {"answered": 0, "insufficient_evidence": 0, "retries": 0, "errors": 0}
 
 FALLBACK_ANSWER = "Maaf, informasi tersebut belum tersedia di knowledge base."
+
+
+def greeting_response(question: str) -> str | None:
+    normalized = question.strip().casefold()
+    if re.fullmatch(r"(?:h[ae]l+o+|hi+|hai+|hey+|selamat (?:pagi|siang|sore|malam))(?:[\s,!?.]+(?:bot|asisten|kak))?[\s,!?.]*", normalized):
+        return "Halo! Saya bisa membantu mencari informasi dari dokumen perusahaan. Apa yang ingin Anda tanyakan?"
+    return None
 
 ENTITY_CODE_PATTERN = re.compile(r"\b[A-Z]{1,6}\d{1,8}\b", re.IGNORECASE)
 
@@ -648,6 +658,9 @@ def reciprocal_rank_fusion(*rankings: list[dict]) -> list[dict]:
 
 
 async def answer_with_rag(question: str, top_k: int = 5) -> dict:
+    greeting = greeting_response(question)
+    if greeting:
+        return {"answer": greeting, "sources": [], "citations": [], "status": "greeting"}
     started = time.monotonic()
     try:
         result = await asyncio.wait_for(_answer_with_rag(question, top_k), settings.REQUEST_TIMEOUT)
@@ -674,14 +687,20 @@ async def answer_with_rag(question: str, top_k: int = 5) -> dict:
 async def _answer_with_rag(question: str, top_k: int = 5) -> dict:
     normalized_question = normalize_question(question)
     entity_codes = _extract_entity_codes(normalized_question)
-    query_vector = await ollama_service.embed(normalized_question)
+    try:
+        query_vector = await ollama_service.embed(normalized_question)
+    except httpx.HTTPError as exc:
+        raise RagDependencyError("embedding") from exc
     fetch_k = max(top_k * 5, 50) if entity_codes else max(top_k * 6, 30)
 
     active = await asyncio.to_thread(index_manifest.versions)
-    vector_results, keyword_results = await asyncio.gather(
-        asyncio.to_thread(qdrant_service.search, query_vector=query_vector, top_k=fetch_k, active_versions=active),
-        asyncio.to_thread(index_manifest.lexical, normalized_question, fetch_k, active),
-    )
+    try:
+        vector_results, keyword_results = await asyncio.gather(
+            asyncio.to_thread(qdrant_service.search, query_vector=query_vector, top_k=fetch_k, active_versions=active),
+            asyncio.to_thread(index_manifest.lexical, normalized_question, fetch_k, active),
+        )
+    except (ResponseHandlingException, httpx.RequestError) as exc:
+        raise RagDependencyError("qdrant") from exc
     vector_results = [item for item in vector_results if item["score"] >= settings.RAG_SCORE_THRESHOLD]
     search_results = reciprocal_rank_fusion(vector_results, keyword_results)
     filtered_results = search_results[:top_k]

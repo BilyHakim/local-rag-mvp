@@ -235,7 +235,7 @@ async function ask(question) {
   try {
     const data = await api('/api/chat-rag', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ question: question.trim(), top_k: Number(qs('#topK').value) })
+      body: JSON.stringify({ question: question.trim(), top_k: Number(qs('#topK').value), model: qs('#llmModel').value || null })
     });
     typing.remove();
     appendMessage('assistant', data.answer, data.status === 'insufficient_evidence' ? [] : (data.sources || []));
@@ -250,6 +250,18 @@ async function ask(question) {
 }
 
 qs('#chatForm').addEventListener('submit', event => { event.preventDefault(); ask(questionInput.value); });
+qs('#resizeComposer').addEventListener('click', () => {
+  const expanded = qs('#chatForm').classList.toggle('expanded');
+  const button = qs('#resizeComposer');
+  const label = expanded ? 'Perkecil kotak pertanyaan' : 'Perbesar kotak pertanyaan';
+  button.setAttribute('aria-expanded', String(expanded));
+  button.setAttribute('aria-label', label);
+  button.title = label;
+  button.querySelector('path').setAttribute('d', expanded
+    ? 'M20 10h-6V4M14 10l7-7M4 14h6v6M10 14l-7 7'
+    : 'M14 4h6v6M20 4l-7 7M10 20H4v-6M4 20l7-7');
+  questionInput.focus({ preventScroll: true });
+});
 questionInput.addEventListener('keydown', event => {
   if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); qs('#chatForm').requestSubmit(); }
 });
@@ -334,4 +346,42 @@ qsa('.nav-item').forEach(item => { item.setAttribute('aria-label', item.textCont
 qsa('svg').forEach(icon => icon.setAttribute('aria-hidden', 'true'));
 const initialView = location.hash.slice(1);
 if (['chat', 'knowledge', 'seo', 'social', 'brand'].includes(initialView)) switchView(initialView, false);
+let modelLoadVersion = 0;
+async function loadModels() {
+  const version = ++modelLoadVersion;
+  const select = qs('#llmModel');
+  const refresh = qs('#refreshModels');
+  const status = qs('#modelStatus');
+  const previous = select.value;
+  select.disabled = true;
+  refresh.disabled = true;
+  refresh.setAttribute('aria-busy', 'true');
+  status.textContent = 'Memuat daftar model...';
+  try {
+    const data = await api('/api/llm/models');
+    if (version !== modelLoadVersion) return;
+    select.replaceChildren(new Option(`Default server${data.default_model ? `: ${data.default_model}` : ''}`, ''));
+    for (const model of data.models) select.add(new Option(model, model));
+    if (data.models.includes(previous)) select.value = previous;
+    select.disabled = !data.models.length;
+    status.textContent = data.models.length
+      ? ''
+      : 'Daftar model kosong. Menggunakan model default server.';
+  } catch (error) {
+    if (version !== modelLoadVersion) return;
+    select.replaceChildren(new Option('Default server', ''));
+    status.textContent = `${error.message} Menggunakan model default server. Coba muat ulang model.`;
+  } finally {
+    if (version === modelLoadVersion) {
+      refresh.disabled = false;
+      refresh.setAttribute('aria-busy', 'false');
+    }
+  }
+}
+qs('#refreshModels').addEventListener('click', loadModels);
+document.addEventListener('workspace-identity-changed', () => {
+  qs('#llmModel').replaceChildren(new Option('Default server', ''));
+  loadModels();
+});
+loadModels();
 checkHealth();

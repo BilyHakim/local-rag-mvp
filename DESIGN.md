@@ -1,5 +1,12 @@
 # Workspace design direction
 
+The RAG composer puts model, refresh, source count, and send in one bottom toolbar.
+Its 24px outer corners soften the writing surface; smaller 10px controls preserve
+hierarchy. Model and source inputs use theme input colors, refresh is a quiet
+44px icon control, and cream belongs to Send. A top-right expand/collapse control
+changes writing height without taking over navigation. Controls wrap on phones.
+Only loading, empty, and error model feedback occupies a status line. No new assets.
+
 Reading this as: a research and content production workspace for SEO and social
 media specialists, in an editorial studio language. ENERGY 2 / RHYTHM 2 /
 MOTION 1. Anti-slop mode: during, selected by the user for this session.

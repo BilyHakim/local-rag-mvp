@@ -62,6 +62,8 @@ def main():
         response = {}
         if path == "/api/health":
             response = {"status": "ok", "env": "local"}
+        elif path == "/api/llm/models":
+            response = {"provider": "api", "default_model": "default-uji", "models": ["model-uji", "model-lain"]}
         elif path.endswith("/workspace/status"):
             response = {"text_provider": "ollama", "text_model": "model-uji", "image_configured": True,
                         "instagram_configured": True, "public_media_configured": True,
@@ -71,6 +73,7 @@ def main():
                 state["profile"] = data
             response = state["profile"]
         elif path == "/api/chat-rag":
+            assert data.get("model") == "model-lain", data
             response = {"answer": "Jawaban dari dokumen uji.", "status": "answered", "sources": [{"source_name": "Dokumen uji", "text": "Bukti pengujian antarmuka."}]}
         elif path == "/api/knowledge/search":
             response = {"results": [{"source_name": "Dokumen uji", "text": "Hasil pencarian fixture.", "score": .73}]}
@@ -169,6 +172,16 @@ def main():
                 for view in ("chat", "seo", "social", "brand", "knowledge"):
                     nav(view)
                     check_layout(f"{view}-{width}-{theme}")
+                    if view == "chat":
+                        expect(page.locator("#llmModel")).to_be_enabled()
+                        normal_height = page.locator("#questionInput").bounding_box()["height"]
+                        page.locator("#resizeComposer").click()
+                        expect(page.locator("#resizeComposer")).to_have_attribute("aria-expanded", "true")
+                        assert page.locator("#questionInput").bounding_box()["height"] > normal_height
+                        check_layout(f"chat-expanded-{width}-{theme}")
+                        page.locator("#resizeComposer").click()
+                        expect(page.locator("#resizeComposer")).to_have_attribute("aria-expanded", "false")
+                        page.screenshot(path=str(output / f"chat-{width}-{theme}.png"), full_page=True)
                 nav("social")
                 page.screenshot(path=str(output / f"social-{width}-{theme}.png"), full_page=True)
                 if width <= 760:
@@ -258,6 +271,16 @@ def main():
         log.append("Knowledge: select/upload CSV, save note, search displays fixture evidence")
 
         nav("chat")
+        page.locator("#questionInput").fill("Teks tetap tersimpan saat ukuran diubah")
+        page.locator("#resizeComposer").focus()
+        page.keyboard.press("Enter")
+        expect(page.locator("#questionInput")).to_have_value("Teks tetap tersimpan saat ukuran diubah")
+        page.locator("#resizeComposer").click()
+        page.locator("#questionInput").fill("")
+        page.locator("#llmModel").select_option("model-lain")
+        page.locator("#refreshModels").click()
+        expect(page.locator("#llmModel")).to_have_value("model-lain")
+        expect(page.locator("#llmModel")).to_be_enabled()
         page.locator("#topK").select_option("3")
         for button in page.locator("[data-question]").all():
             button.click()
@@ -272,6 +295,18 @@ def main():
         page.locator("#newChatButton").click()
         page.locator(".brand").click()
         log.append("RAG: all suggestions, source-count select, send, evidence disclosure, new conversation, wordmark navigation")
+        page.route("**/api/llm/models", lambda route: route.fulfill(status=503, json={"detail": "Katalog model tidak tersedia"}))
+        page.locator("#refreshModels").click()
+        expect(page.locator("#modelStatus")).to_contain_text("Menggunakan model default server")
+        expect(page.locator("#modelStatus")).to_be_visible()
+        expect(page.locator("#llmModel")).to_have_value("")
+        expect(page.locator("#llmModel")).to_be_disabled()
+        expect(page.locator("#sendButton")).to_be_enabled()
+        page.unroute("**/api/llm/models")
+        page.locator("#refreshModels").click()
+        expect(page.locator("#llmModel")).to_be_enabled()
+        log.append("Model select: catalog load, selection sent to RAG, refresh preserves choice, failure restores default, retry recovers")
+        log.append("Composer: expand/collapse at all viewports and themes, keyboard activation, text retained")
         with page.expect_popup() as popup:
             page.locator("#apiDocsLink").click()
         assert urlsplit(popup.value.url).path == "/docs"

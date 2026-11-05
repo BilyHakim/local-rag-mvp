@@ -49,6 +49,43 @@ async def test_other_api_provider_keeps_store_false_and_original_budget(monkeypa
         await service.close()
 
 
+@pytest.mark.parametrize("model", ["gpt-6-luna", "openai/gpt-6-luna", "gemini-3.8-flash"])
+@pytest.mark.parametrize("budget", [8, 64, 512, 8192])
+async def test_commandcode_reserves_reasoning_budget_for_selected_model(monkeypatch, model, budget):
+    from app.services.model_service import chat_model_context
+    monkeypatch.setattr(settings, "AI_API_BASE_URL", "https://api.commandcode.ai/provider/v1")
+    payloads = []
+
+    def respond(request):
+        payloads.append(json.loads(request.content))
+        return httpx.Response(200, json={"choices": [{"message": {"content": "PASS"}}]})
+
+    service = AIService()
+    service._client = httpx.AsyncClient(transport=httpx.MockTransport(respond))
+    token = chat_model_context.set(model)
+    try:
+        await service.chat_api("Verify", "Test", budget)
+        assert payloads[0]["model"] == model
+        assert payloads[0]["max_completion_tokens"] == max(budget, 4096)
+        assert payloads[0]["reasoning_effort"] == "low"
+    finally:
+        chat_model_context.reset(token)
+        await service.close()
+
+
+async def test_truncated_response_is_a_safe_provider_error():
+    service = AIService()
+    service._client = httpx.AsyncClient(transport=httpx.MockTransport(
+        lambda request: httpx.Response(200, json={"choices": [{"finish_reason": "length", "message": {"content": "private-partial-output"}}]})))
+    try:
+        with pytest.raises(AIProviderError) as error:
+            await service.chat_api("System", "Test")
+        assert "private" not in error.value.detail
+        assert "terpotong" in error.value.detail
+    finally:
+        await service.close()
+
+
 @pytest.mark.parametrize("status", [400, 401, 403, 404, 429, 503])
 async def test_provider_error_never_exposes_upstream_body_or_key(status):
     service = AIService()
@@ -65,7 +102,7 @@ async def test_provider_error_never_exposes_upstream_body_or_key(status):
 
 @pytest.mark.parametrize("path,body,target", [
     ("/api/chat-basic", {"message": "Hi"}, "generate"),
-    ("/api/chat-rag", {"question": "Hi"}, "rag"),
+    ("/api/chat-rag", {"question": "Apa layanan perusahaan?"}, "rag"),
     ("/api/embedding-test", {"text": "Hi"}, "embed"),
 ])
 async def test_chat_routes_return_safe_actionable_provider_errors(monkeypatch, path, body, target):

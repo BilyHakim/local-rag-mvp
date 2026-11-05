@@ -28,19 +28,21 @@ class OllamaService:
         return response.json()
 
     async def generate(self, prompt: str) -> str:
+        from app.services.model_service import chat_model_context
         if settings.AI_PROVIDER == "api":
             from app.services.ai_service import ai_service
             return await ai_service.chat_api("Anda adalah asisten yang membantu.", prompt)
-        data = await self._post("generate", {"model": self.chat_model, "prompt": prompt,
+        data = await self._post("generate", {"model": chat_model_context.get() or self.chat_model, "prompt": prompt,
                                "stream": False, "options": {"temperature": 0, "num_predict": 512}})
         return data["response"]
 
     async def chat(self, system_prompt: str, user_prompt: str, *, max_tokens: int | None = None) -> str:
+        from app.services.model_service import chat_model_context
         if settings.AI_PROVIDER == "api":
             from app.services.ai_service import ai_service
             return await ai_service.chat_api(system_prompt, user_prompt, max_tokens or 512)
         data = await self._post("chat", {
-            "model": self.chat_model, "stream": False,
+            "model": chat_model_context.get() or self.chat_model, "stream": False,
             "messages": [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}],
             "options": {"temperature": 0, "num_predict": max_tokens or 512},
         })
