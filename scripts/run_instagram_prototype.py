@@ -23,6 +23,13 @@ async def main():
         raise SystemExit("Port must be between 1 and 65535.")
     if args.port == args.media_port:
         raise SystemExit("UI and media ports must be different.")
+    if not args.cloudflared.is_file():
+        raise SystemExit(
+            f"cloudflared tidak ditemukan: {args.cloudflared.resolve()}. "
+            "Unduh cloudflared.exe dari https://developers.cloudflare.com/tunnel/downloads/ "
+            "lalu gunakan --cloudflared dengan lokasi file tersebut. "
+            "Belum ada request Instagram atau AI yang dikirim."
+        )
     sockets = []
     try:
         for port in (args.port, args.media_port):
