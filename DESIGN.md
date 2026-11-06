@@ -1,5 +1,13 @@
 # Workspace design direction
 
+Social Media model selection follows ENERGY 2 / RHYTHM 2 / MOTION 1. Place a
+compact native "Model teks" select beside "Tulis tanpa AI" below generation,
+keeping secondary controls together without interrupting brief entry. Reuse white
+brief inputs with a 240px maximum group width and a labelled 44px refresh icon;
+the row wraps on phones and long model names stay inside the select. A status line
+appears only for loading, empty catalogs, and errors. Text model selection applies
+to creation and revision; image generation keeps its own server configuration.
+
 Manual Instagram prototype: keep ENERGY 2 / RHYTHM 2 / MOTION 1. Place a native,
 visibly labelled image picker beside the existing preview, with the same quiet
 secondary button style as Save. This groups image selection with its result and

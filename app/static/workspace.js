@@ -209,6 +209,7 @@
     run(event.submitter, async epoch => {
       const f = event.target.elements;
       const post = await api(base + '/social/generate', json({ brief: f.brief.value, channel: f.channel.value,
+        model: f.model.value || null,
         use_knowledge: f.use_knowledge.checked, post_id: selected?.id || null, revision: selected?.revision || null }));
       if (epoch !== identityEpoch) return;
       f.brief.value = ''; await renderPost(post); await loadPosts();

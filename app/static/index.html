@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="Workspace untuk knowledge perusahaan, audit SEO, dan produksi konten social media.">
   <title>Company AI Workspace</title>
-  <link rel="stylesheet" href="/static/styles.css?v=11">
+  <link rel="stylesheet" href="/static/styles.css?v=13">
 </head>
 <body>
   <a class="skip-link" href="#mainContent">Langsung ke area kerja</a>
@@ -220,7 +220,17 @@
                 <label class="field"><span>Brief atau arahan revisi</span><textarea name="brief" rows="6" minlength="3" maxlength="8000" required placeholder="Tuliskan tema, target audiens, pesan utama, dan gaya bahasa yang Anda inginkan."></textarea></label>
                 <label class="workspace-check"><input name="use_knowledge" type="checkbox" checked> Gunakan knowledge perusahaan</label>
                 <button class="primary-button" type="submit" id="generateSocial">Buat draft konten</button>
-                <button class="workspace-button" type="button" id="manualSocial">Tulis tanpa AI</button>
+                <div class="social-secondary-actions">
+                  <button class="workspace-button" type="button" id="manualSocial">Tulis tanpa AI</button>
+                  <div class="field social-model-field">
+                    <label for="socialModel">Model teks</label>
+                    <div class="social-model-controls">
+                      <select id="socialModel" name="model" aria-describedby="socialModelStatus" disabled><option value="">Default server</option></select>
+                      <button type="button" class="workspace-button" id="refreshSocialModels" aria-label="Muat ulang model teks" title="Muat ulang model teks"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5"/><path d="M6.1 7a7 7 0 0 1 11.6-1L20 9M4 15l2.3 3A7 7 0 0 0 17.9 17"/></svg></button>
+                    </div>
+                    <p id="socialModelStatus" class="social-model-status" role="status"></p>
+                  </div>
+                </div>
               </form>
               <div id="socialNotes" class="workspace-notes" aria-live="polite"></div>
             </div>
@@ -267,7 +277,7 @@
     </main>
   </div>
   <div class="toast" id="toast" role="status"></div>
-  <script src="/static/app.js?v=7"></script>
-  <script src="/static/workspace.js?v=2"></script>
+  <script src="/static/app.js?v=8"></script>
+  <script src="/static/workspace.js?v=3"></script>
 </body>
 </html>

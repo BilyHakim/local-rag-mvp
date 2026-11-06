@@ -346,12 +346,13 @@ qsa('.nav-item').forEach(item => { item.setAttribute('aria-label', item.textCont
 qsa('svg').forEach(icon => icon.setAttribute('aria-hidden', 'true'));
 const initialView = location.hash.slice(1);
 if (['chat', 'knowledge', 'seo', 'social', 'brand'].includes(initialView)) switchView(initialView, false);
-let modelLoadVersion = 0;
-async function loadModels() {
-  const version = ++modelLoadVersion;
-  const select = qs('#llmModel');
-  const refresh = qs('#refreshModels');
-  const status = qs('#modelStatus');
+const modelLoadVersions = new Map();
+async function loadModels(selectId = 'llmModel', refreshId = 'refreshModels', statusId = 'modelStatus') {
+  const version = (modelLoadVersions.get(selectId) || 0) + 1;
+  modelLoadVersions.set(selectId, version);
+  const select = qs(`#${selectId}`);
+  const refresh = qs(`#${refreshId}`);
+  const status = qs(`#${statusId}`);
   const previous = select.value;
   select.disabled = true;
   refresh.disabled = true;
@@ -359,7 +360,7 @@ async function loadModels() {
   status.textContent = 'Memuat daftar model...';
   try {
     const data = await api('/api/llm/models');
-    if (version !== modelLoadVersion) return;
+    if (version !== modelLoadVersions.get(selectId)) return;
     select.replaceChildren(new Option(`Default server${data.default_model ? `: ${data.default_model}` : ''}`, ''));
     for (const model of data.models) select.add(new Option(model, model));
     if (data.models.includes(previous)) select.value = previous;
@@ -368,20 +369,25 @@ async function loadModels() {
       ? ''
       : 'Daftar model kosong. Menggunakan model default server.';
   } catch (error) {
-    if (version !== modelLoadVersion) return;
+    if (version !== modelLoadVersions.get(selectId)) return;
     select.replaceChildren(new Option('Default server', ''));
     status.textContent = `${error.message} Menggunakan model default server. Coba muat ulang model.`;
   } finally {
-    if (version === modelLoadVersion) {
+    if (version === modelLoadVersions.get(selectId)) {
       refresh.disabled = false;
       refresh.setAttribute('aria-busy', 'false');
     }
   }
 }
-qs('#refreshModels').addEventListener('click', loadModels);
+const loadSocialModels = () => loadModels('socialModel', 'refreshSocialModels', 'socialModelStatus');
+qs('#refreshModels').addEventListener('click', () => loadModels());
+qs('#refreshSocialModels').addEventListener('click', loadSocialModels);
 document.addEventListener('workspace-identity-changed', () => {
   qs('#llmModel').replaceChildren(new Option('Default server', ''));
+  qs('#socialModel').replaceChildren(new Option('Default server', ''));
   loadModels();
+  loadSocialModels();
 });
 loadModels();
+loadSocialModels();
 checkHealth();

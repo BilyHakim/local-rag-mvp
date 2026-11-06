@@ -44,6 +44,7 @@ class SocialDraft(BaseModel):
 
 class GenerateRequest(BaseModel):
     brief: str = Field(min_length=3, max_length=8000)
+    model: str | None = Field(default=None, min_length=1, max_length=200)
     channel: Literal["instagram", "website"] = "instagram"
     use_knowledge: bool = True
     post_id: str | None = Field(default=None, pattern=r"^[a-f0-9]{32}$")

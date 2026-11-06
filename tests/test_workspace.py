@@ -160,6 +160,55 @@ async def test_social_chat_revises_same_post_and_resets_approval(monkeypatch):
     assert revised["title"] == "Revised"
 
 
+async def test_social_model_selection_creation_revision_and_default(monkeypatch):
+    from app.api import chat
+    from app.services.model_service import chat_model_context
+
+    monkeypatch.setattr(chat, "list_chat_models", AsyncMock(return_value={"models": ["model-a", "model-b"]}))
+    seen = []
+
+    async def structured(*args):
+        seen.append(chat_model_context.get())
+        await asyncio.sleep(0)
+        assert chat_model_context.get() == seen[-1]
+        return SocialDraft(title="Title", caption="Caption", image_prompt="Ocean")
+
+    monkeypatch.setattr(specialists.ai_service, "structured", structured)
+    body = {"brief": "Create a post", "use_knowledge": False, "model": "model-a"}
+    created = await client_request("POST", "/api/workspace/social/generate", json=body)
+    assert created.status_code == 200
+    post = created.json()
+    revised = await client_request("POST", "/api/workspace/social/generate", json={
+        **body, "model": "model-b", "post_id": post["id"], "revision": post["revision"],
+    })
+    assert revised.status_code == 200
+    assert revised.json()["id"] == post["id"]
+    default = await client_request("POST", "/api/workspace/social/generate", json={**body, "model": None})
+    assert default.status_code == 200
+    assert seen == ["model-a", "model-b", None]
+    rejected = await client_request("POST", "/api/workspace/social/generate", json={**body, "model": "unknown"})
+    assert rejected.status_code == 422
+    assert len(seen) == 3
+    assert chat_model_context.get() is None
+
+
+async def test_social_provider_failure_restores_model_context(monkeypatch):
+    from app.api import chat, workspace
+    from app.services.ai_service import AIProviderError
+    from app.services.model_service import chat_model_context
+
+    monkeypatch.setattr(chat, "list_chat_models", AsyncMock(return_value={"models": ["chosen"]}))
+
+    async def fail(payload):
+        assert chat_model_context.get() == "chosen"
+        raise AIProviderError(503)
+
+    monkeypatch.setattr(workspace, "generate_social", fail)
+    with pytest.raises(AIProviderError):
+        await workspace.social_generate(GenerateRequest(brief="Make a post", model="chosen"))
+    assert chat_model_context.get() is None
+
+
 def test_schedule_rejects_naive_and_past_times():
     with pytest.raises(ValueError):
         ScheduleRequest(revision=1, scheduled_at=datetime.now())

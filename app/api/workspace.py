@@ -10,6 +10,8 @@ from app.schemas.workspace import (BrandProfile, AuditRequest, GenerateRequest, 
                                    RevisionRequest, ScheduleRequest, ResolveRequest, ManualPostRequest)
 from app.services import workspace_store as store
 from app.services.specialist_service import audit_url, generate_social
+from app.api.chat import select_model
+from app.services.model_service import chat_model_context
 from app.services.publishing_service import (connections, generate_image, image_path, publish_post,
                                    validate_publishable, validate_signature, upload_image, instagram_connection)
 
@@ -88,7 +90,11 @@ async def audit(record_id: str):
 
 @router.post("/social/generate")
 async def social_generate(payload: GenerateRequest):
-    return await generate_social(payload)
+    token = await select_model(payload.model)
+    try:
+        return await generate_social(payload)
+    finally:
+        chat_model_context.reset(token)
 
 
 @router.get("/social/posts")

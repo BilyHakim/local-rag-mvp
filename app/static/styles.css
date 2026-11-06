@@ -178,6 +178,15 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
 .brief-panel textarea::placeholder { color: #496574; }
 .brief-panel :focus-visible { outline-color: var(--cream); }
 .brief-panel .primary-button { align-self: stretch; }
+.social-secondary-actions { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.social-secondary-actions > button { align-self: flex-start; margin-top: 26px; }
+.social-model-field { flex: 1 1 170px; max-width: 240px; width: 100%; }
+.social-model-field > label { color: white; font-size: 12px; font-weight: 600; }
+.social-model-controls { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.brief-panel .social-model-controls select { flex: 1; width: 0; padding: 8px 24px 8px 10px; font-size: 13px; text-overflow: ellipsis; }
+.social-model-controls button { flex: 0 0 44px; width: 44px; padding: 10px; }
+.social-model-status { margin: 0; color: white; font-size: 13px; }
+.social-model-status:empty { display: none; }
 .brief-panel .workspace-check input { accent-color: var(--cream); }
 .workspace-row, .workspace-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
 .workspace-row { justify-content: space-between; }

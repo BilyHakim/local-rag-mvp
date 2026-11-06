@@ -93,6 +93,7 @@ def main():
         elif "/seo/audits/" in path:
             response = state["audits"][-1]
         elif path.endswith("/social/generate"):
+            state.setdefault("social_models", []).append(data.get("model"))
             post_id = data.get("post_id") or "a" * 32
             previous = state["posts"].get(post_id, {})
             response = {"id": post_id, "revision": previous.get("revision", 0) + 1, "status": "draft", "channel": data["channel"],
@@ -190,6 +191,10 @@ def main():
                         expect(page.locator("#resizeComposer")).to_have_attribute("aria-expanded", "false")
                         page.screenshot(path=str(output / f"chat-{width}-{theme}.png"), full_page=True)
                 nav("social")
+                expect(page.locator("#socialModel")).to_be_enabled()
+                page.locator("#socialModel").select_option("model-lain")
+                page.locator("#refreshSocialModels").click()
+                expect(page.locator("#socialModel")).to_have_value("model-lain")
                 page.screenshot(path=str(output / f"social-{width}-{theme}.png"), full_page=True)
                 if width <= 760:
                     page.locator(".view.active .mobile-menu").click()
@@ -242,12 +247,20 @@ def main():
         expect(page.locator("#socialView .connection-items")).to_contain_text("model-uji")
         page.locator('#socialForm [name="channel"]').select_option("website")
         page.locator('#socialForm [name="brief"]').fill("Brief pengujian antarmuka")
+        page.locator("#socialModel").focus()
+        page.keyboard.press("ArrowDown")
+        page.keyboard.press("Enter")
+        page.locator("#socialModel").select_option("model-lain")
         page.locator("#generateSocial").click()
         expect(page.locator("#postStatus")).to_contain_text("Draft")
+        assert state["social_models"][-1] == "model-lain"
         page.locator('#postEditor [name="caption"]').fill("Materi yang diedit untuk pengujian.")
         page.locator("#saveDraft").click()
         page.locator('#socialForm [name="brief"]').fill("Revisi materi pengujian")
+        page.locator("#socialModel").select_option("model-uji")
         page.locator("#generateSocial").click()
+        expect(page.locator("#postStatus")).to_contain_text("v3")
+        assert state["social_models"][-1] == "model-uji"
         page.locator("#generateImage").click()
         expect(page.locator("#socialImage")).to_be_visible()
         page.locator("#publicationSection summary").click()
@@ -268,6 +281,25 @@ def main():
         page.locator('[data-post-id="' + "a" * 32 + '"]').click()
         page.locator("#newSocial").click()
         expect(page.locator("#postStatus")).to_have_text("Belum ada draft")
+        page.route("**/api/llm/models", lambda route: route.fulfill(status=200, json={"models": [], "default_model": "default-uji"}))
+        page.locator("#refreshSocialModels").click()
+        expect(page.locator("#socialModelStatus")).to_contain_text("Daftar model kosong")
+        expect(page.locator("#socialModel")).to_be_disabled()
+        page.unroute("**/api/llm/models")
+        page.route("**/api/llm/models", lambda route: route.fulfill(status=503, json={"detail": "Katalog model tidak tersedia"}))
+        page.locator("#refreshSocialModels").click()
+        expect(page.locator("#socialModelStatus")).to_contain_text("Menggunakan model default server")
+        expect(page.locator("#socialModel")).to_be_disabled()
+        expect(page.locator("#generateSocial")).to_be_enabled()
+        page.locator('#socialForm [name="brief"]').fill("Draft dengan model default")
+        page.locator("#generateSocial").click()
+        expect(page.locator("#postStatus")).to_contain_text("Draft")
+        assert state["social_models"][-1] is None
+        page.unroute("**/api/llm/models")
+        page.locator("#refreshSocialModels").click()
+        expect(page.locator("#socialModel")).to_be_enabled()
+        page.locator("#newSocial").click()
+        log.append("Social model: keyboard select, refresh preserves choice at all widths/themes, create/revise sends chosen model, empty/error uses default, retry recovers")
         log.append("Social: channel, brief, generate, edit/save, revise, image, approve, schedule, cancel, publish/uncertain, reconcile, planner, refresh, open, new")
 
         nav("seo")
