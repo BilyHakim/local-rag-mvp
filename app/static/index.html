@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="Workspace untuk knowledge perusahaan, audit SEO, dan produksi konten social media.">
   <title>Company AI Workspace</title>
-  <link rel="stylesheet" href="/static/styles.css?v=15">
+  <link rel="stylesheet" href="/static/styles.css?v=16">
 </head>
 <body>
   <a class="skip-link" href="#mainContent">Langsung ke area kerja</a>
@@ -52,14 +52,7 @@
     <main class="main" id="mainContent" tabindex="-1">
       <div class="utility-bar">
         <span class="utility-label">Company workspace</span>
-        <details class="access-control" id="accessControl">
-          <summary><span id="accessStatus">Akses workspace</span></summary>
-          <form class="access-form" id="accessForm">
-            <label class="field"><span>Kunci akses workspace</span><input id="accessKeyInput" type="password" autocomplete="off" placeholder="Masukkan kunci akses" required></label>
-            <p>Kunci hanya aktif di tab ini. Untuk penggunaan lokal tanpa autentikasi, Anda dapat langsung bekerja.</p>
-            <div class="access-actions"><button class="primary-button dark" type="submit">Gunakan key</button><button class="workspace-button" type="button" id="logoutButton">Keluar</button></div>
-          </form>
-        </details>
+        <div class="workspace-actions"><span class="utility-label" id="accessStatus">Memeriksa sesi...</span><button class="workspace-button" type="button" id="logoutButton">Keluar</button></div>
       </div>
       <p class="workspace-feedback" id="workspaceFeedback" role="alert" hidden></p>
       <section class="view active" id="chatView">
@@ -295,7 +288,7 @@
     </main>
   </div>
   <div class="toast" id="toast" role="status"></div>
-  <script src="/static/app.js?v=9"></script>
-  <script src="/static/workspace.js?v=5"></script>
+  <script src="/static/app.js?v=10"></script>
+  <script src="/static/workspace.js?v=6"></script>
 </body>
 </html>

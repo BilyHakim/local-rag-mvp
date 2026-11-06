@@ -10,6 +10,8 @@ from uuid import uuid4
 from starlette.responses import JSONResponse
 from app.core.config import settings
 from app.core.security import tenant_context
+from starlette.requests import Request
+from app.services import auth_service as auth
 
 log = logging.getLogger("http")
 metrics = {"requests": 0, "errors": 0, "duration_ms": 0}
@@ -36,8 +38,12 @@ class SecurityMiddleware:
         for key, candidate in settings.API_KEYS.items():
             if hmac.compare_digest(token.encode(), key.encode()):
                 principal = candidate
-        if principal is None and settings.APP_ENV == "local" and not settings.API_KEYS:
-            principal = {"tenant": "local", "role": "admin"}
+        session_auth = False
+        if principal is None and not token and settings.AUTH_ENABLED:
+            principal = await asyncio.to_thread(auth.resolve_session, Request(scope).cookies.get(auth.COOKIE_NAME))
+            session_auth = principal is not None
+        if principal is None and not settings.AUTH_ENABLED and settings.APP_ENV == "local" and not settings.API_KEYS:
+            principal = {"username": "local", "tenant": "local", "role": "admin"}
 
         async def reject(status, detail, retry_after=None):
             response_headers = {"X-Request-ID": request_id, "X-Content-Type-Options": "nosniff", "Cache-Control": "no-store"}
@@ -52,16 +58,27 @@ class SecurityMiddleware:
                                  "status": status, "duration_ms": elapsed,
                                  "tenant": principal["tenant"] if principal else "unauthenticated"}))
 
-        if principal is None:
-            return await reject(401, "API key diperlukan")
+        public_auth = path in {"/api/auth/login", "/api/auth/logout"}
+        if (session_auth or public_auth) and scope["method"] not in {"GET", "HEAD", "OPTIONS"}:
+            origin = headers.get(b"origin", b"").decode(errors="replace")
+            expected = scope["scheme"] + "://" + headers.get(b"host", b"").decode(errors="replace")
+            if headers.get(b"x-requested-with") != b"workspace" or (origin and origin != expected) or headers.get(b"sec-fetch-site") == b"cross-site":
+                return await reject(403, "Request harus berasal dari aplikasi workspace.")
+        if principal is None and not public_auth:
+            return await reject(401, "Silakan login untuk mengakses workspace.")
+        principal = principal or {"tenant": "unauthenticated", "role": "anonymous"}
+        scope.setdefault("state", {})["principal"] = principal
         reader_paths = {"/api/chat-rag", "/api/knowledge/search", "/api/ready"}
-        if principal["role"] != "admin" and path not in reader_paths:
+        if principal["role"] != "admin" and path not in reader_paths | {"/api/auth/me", "/api/auth/login", "/api/auth/logout"}:
             return await reject(403, "Akses admin diperlukan")
         now = time.monotonic()
-        window = self.windows[token or "local"]
+        rate_key = token or (principal["tenant"] + ":" + principal.get("username", "session"))
+        if path == "/api/auth/login":
+            rate_key = "login:" + (scope.get("client") or ("unknown", 0))[0]
+        window = self.windows[rate_key]
         while window and window[0] <= now - 60:
             window.popleft()
-        if len(window) >= settings.RATE_LIMIT_PER_MINUTE:
+        if len(window) >= (10 if path == "/api/auth/login" else settings.RATE_LIMIT_PER_MINUTE):
             return await reject(429, "Batas request tercapai; coba lagi nanti", retry_after=max(1, int(60 - (now - window[0]))))
         window.append(now)
         if self.inflight >= 4:

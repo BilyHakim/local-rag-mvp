@@ -8,24 +8,12 @@ const messages = qs('#messages');
 const welcome = qs('#welcomeState');
 const questionInput = qs('#questionInput');
 const toast = qs('#toast');
-let accessKey = '';
-const accessForm = qs('#accessForm');
-const accessControl = qs('#accessControl');
-accessForm.addEventListener('submit', event => {
-  event.preventDefault();
-  accessKey = accessForm.querySelector('input').value.trim();
-  accessForm.querySelector('input').value = '';
-  qs('#accessStatus').textContent = 'Key aktif di tab ini';
-  accessControl.open = false;
-  showToast('Kunci akses aktif untuk tab ini.');
-  document.dispatchEvent(new Event('workspace-identity-changed'));
-});
-accessForm.querySelector('button[type="button"]').addEventListener('click', () => {
-  accessKey = '';
-  qs('#accessStatus').textContent = 'Akses workspace';
-  accessControl.open = false;
-  showToast('Kunci akses dihapus.');
-  document.dispatchEvent(new Event('workspace-identity-changed'));
+qs('#logoutButton').addEventListener('click', async event => {
+  event.currentTarget.disabled = true;
+  try {
+    await api('/api/auth/logout', { method: 'POST' });
+    location.replace('/login');
+  } catch (error) { showToast(error.message); qs('#logoutButton').disabled = false; }
 });
 
 function escapeHtml(value = '') {
@@ -36,10 +24,12 @@ function escapeHtml(value = '') {
 
 async function api(path, options = {}) {
   options.headers = new Headers(options.headers || {});
-  if (accessKey) options.headers.set('Authorization', `Bearer ${accessKey}`);
+  options.credentials = 'same-origin';
+  options.headers.set('X-Requested-With', 'workspace');
   const response = await fetch(path, options);
   let body = {};
   try { body = await response.json(); } catch (_) { /* empty response */ }
+  if (response.status === 401) location.replace('/login' + location.hash);
   if (!response.ok) throw new Error(Array.isArray(body.detail) ? body.detail.map(item => item.msg).join('; ') : body.detail || 'Terjadi kesalahan pada server.');
   return body;
 }
@@ -136,7 +126,6 @@ qs('.brand').addEventListener('click', event => { event.preventDefault(); switch
 document.addEventListener('keydown', event => {
   if (event.key === 'Escape') {
     if (sidebar.classList.contains('open')) closeMobileMenu();
-    if (accessControl.open) { accessControl.open = false; qs('summary', accessControl).focus(); }
   }
   if (event.key === 'Tab' && sidebar.classList.contains('open') && window.matchMedia('(max-width: 760px)').matches) {
     const controls = qsa('button:not(:disabled), a[href]', sidebar).filter(el => !el.hidden && el.getClientRects().length);
@@ -144,9 +133,6 @@ document.addEventListener('keydown', event => {
     if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
     else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
   }
-});
-document.addEventListener('click', event => {
-  if (accessControl.open && !accessControl.contains(event.target)) accessControl.open = false;
 });
 window.matchMedia('(max-width: 760px)').addEventListener('change', () => {
   sidebar.classList.remove('open');
@@ -396,3 +382,4 @@ loadModels();
 loadSocialModels();
 loadCampaignModels();
 checkHealth();
+api('/api/auth/me').then(user => { qs('#accessStatus').textContent = user.username || 'API key'; }).catch(() => {});

@@ -8,6 +8,8 @@ class Settings(BaseSettings):
     APP_HOST: str = "0.0.0.0"
     APP_PORT: int = 8000
     API_KEYS: dict[str, dict[str, str]] = {}
+    AUTH_ENABLED: bool = True
+    AUTH_INITIAL_PASSWORD: str = ""
     MAX_UPLOAD_BYTES: int = 25 * 1024 * 1024
     MAX_CHUNKS: int = 10000
     MAX_SOURCES_PER_TENANT: int = 1000

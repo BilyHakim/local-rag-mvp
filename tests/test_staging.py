@@ -3,8 +3,8 @@ import warnings
 
 import httpx
 import pytest
-from qdrant_client import QdrantClient
 from app.core.config import settings, Settings
+from qdrant_client import QdrantClient
 from app.core.security import tenant_context
 from app.services import index_manifest, ingestion_service
 from app.services.qdrant_service import QdrantService

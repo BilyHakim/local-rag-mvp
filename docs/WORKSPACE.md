@@ -6,6 +6,39 @@ Fitur specialist dan profil perusahaan memerlukan role admin; reader tetap hanya
 memiliki akses baca RAG seperti sebelumnya. Setiap tenant mempunyai profil, audit,
 draft, gambar, serta koneksi publishing sendiri.
 
+## Login workspace
+
+Autentikasi browser aktif secara default. Restart server/launcher setelah update,
+lalu buka `/login` atau alamat utama aplikasi. Untuk penggunaan lokal, akun awal
+adalah **admin / admin123**, dibuat pada login pertama jika akun belum ada.
+Akun ini memakai role admin dan tenant `local`, sehingga profil, knowledge, draft
+dan kampanye lokal sebelumnya tetap tersedia. Semua API workspace kini memerlukan
+sesi login atau API key yang valid.
+
+Password disimpan sebagai hash scrypt bersalt di `STORAGE_DIR/auth.sqlite3`.
+Cookie `rag_session` bersifat HttpOnly, SameSite=Lax dan berlaku delapan jam;
+database hanya menyimpan hash token sesi. Logout mencabut sesi di server.
+Cookie memakai Secure pada HTTPS atau di luar mode local. Request perubahan
+dari browser wajib menyertakan header `X-Requested-With: workspace` dan origin
+yang sesuai; UI sudah mengirimkannya. Login dibatasi sepuluh percobaan per menit
+per alamat klien pada satu proses server.
+
+`AUTH_INITIAL_PASSWORD` dapat menentukan password awal hanya saat akun belum
+dibuat. Mengubah variabel tersebut tidak mengganti password akun yang sudah ada.
+Di luar `APP_ENV=local`, akun default tidak dibuat tanpa password awal eksplisit;
+konfigurasi API_KEYS staging yang sudah ada tetap diperlukan. Gunakan password
+awal yang berbeda untuk deployment publik dan HTTPS untuk sesi browser.
+API key Bearer tetap didukung untuk skrip; UI sekarang memakai login.
+Tidak ada registrasi pengguna, reset password atau pengelolaan akun melalui UI.
+`AUTH_ENABLED=false` hanya menyediakan bypass lokal jika tidak ada API_KEYS;
+biarkan aktif untuk penggunaan normal.
+
+Launcher Instagram memakai login yang sama pada port 8011. Endpoint `/media/...`
+tetap menggunakan signature/expiry agar Meta bisa mengambil gambar tanpa cookie.
+Logout tidak menghentikan scheduler atau kampanye aktif; jeda kampanye dari
+planner jika publikasi juga ingin dihentikan. Backup `auth.sqlite3` bersama
+database workspace; jangan memasukkannya ke version control.
+
 ## Prototype dengan API AI
 
 Tambahkan konfigurasi berikut ke `.env` lokal atau `.env.staging` sesuai deployment.

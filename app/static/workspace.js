@@ -126,7 +126,8 @@
     const epoch = identityEpoch;
     if (post.image_id) {
       try {
-        const response = await fetch(`${base}/social/posts/${post.id}/image`, { headers: accessKey ? { Authorization: `Bearer ${accessKey}` } : {} });
+        const response = await fetch(`${base}/social/posts/${post.id}/image`, { credentials: 'same-origin' });
+        if (response.status === 401) { location.replace('/login' + location.hash); return; }
         if (!response.ok) throw new Error('Preview gambar belum dapat dimuat.');
         const blob = await response.blob();
         if (epoch !== identityEpoch || selected?.id !== post.id || selected?.revision !== post.revision) return;

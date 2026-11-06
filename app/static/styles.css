@@ -11,6 +11,15 @@
   --error: #ffb3c0; --error-bg: #452334; color-scheme: dark;
 }
 * { box-sizing: border-box; }
+.login-page { min-height: 100dvh; display: grid; place-items: center; padding: 24px 20px; }
+.login-layout { width: min(100%, 440px); }
+.login-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 24px; }
+.login-wordmark { color: var(--ink); font-size: 26px; font-weight: 700; text-decoration: none; }
+.login-wordmark strong { color: var(--accent); }
+.login-panel h1 { font-size: clamp(24px, 4vw, 30px); margin-bottom: 16px; }
+.login-panel > p { color: var(--muted); }
+.login-panel .primary-button { align-self: stretch; }
+.login-panel .workspace-error { margin: 0; }
 [hidden] { display: none !important; }
 html { scroll-padding-top: 24px; }
 body { margin: 0; font-family: "Segoe UI", system-ui, sans-serif; color: var(--ink); background: var(--canvas); font-size: 15px; line-height: 1.55; }

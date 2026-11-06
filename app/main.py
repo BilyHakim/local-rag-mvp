@@ -20,6 +20,10 @@ from app.services.ai_service import ai_service, AIProviderError
 from app.services.rag_errors import RagDependencyError
 from app.api.workspace import router as workspace_router, media_router
 from app.services.publishing_service import scheduler_loop
+from app.api.auth import router as auth_router
+from app.services import auth_service
+from fastapi import Request
+from fastapi.responses import RedirectResponse
 from starlette.exceptions import HTTPException
 from fastapi.responses import JSONResponse
 
@@ -49,6 +53,7 @@ app = FastAPI(
 app.add_middleware(SecurityMiddleware)
 app.include_router(workspace_router, prefix="/api", tags=["workspace"])
 app.include_router(media_router)
+app.include_router(auth_router)
 
 
 @app.exception_handler(AIProviderError)
@@ -79,8 +84,10 @@ app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
 
 @app.get("/", include_in_schema=False)
-async def web_app():
-    return FileResponse(static_dir / "index.html")
+async def web_app(request: Request):
+    if settings.AUTH_ENABLED and not await asyncio.to_thread(auth_service.resolve_session, request.cookies.get(auth_service.COOKIE_NAME)):
+        return RedirectResponse("/login", status_code=303, headers={"Cache-Control": "no-store"})
+    return FileResponse(static_dir / "index.html", headers={"Cache-Control": "no-store"})
 
 
 app.include_router(

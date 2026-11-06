@@ -52,6 +52,9 @@ def main():
             route.abort()
             return
         path = url.path
+        if path == "/":
+            route.fulfill(path=str(Path(__file__).resolve().parents[1] / "app/static/index.html"))
+            return
         if not path.startswith("/api/"):
             route.continue_()
             return
@@ -60,7 +63,9 @@ def main():
         except Exception:
             data = {}
         response = {}
-        if path == "/api/health":
+        if path == "/api/auth/me":
+            response = {"username": "admin", "tenant": "local", "role": "admin"}
+        elif path == "/api/health":
             response = {"status": "ok", "env": "local"}
         elif path == "/api/llm/models":
             response = {"provider": "api", "default_model": "default-uji", "models": ["model-uji", "model-lain"]}
@@ -235,16 +240,9 @@ def main():
         expect(page.locator(".app-shell")).to_have_class("app-shell sidebar-hidden")
         page.locator("#sidebarCollapse").click()
         log.append("Sidebar: collapse/expand; mobile menu: opens, traps focus, Escape/backdrop closes")
-        page.locator("#accessControl summary").click()
-        page.locator("#accessKeyInput").fill("test-only-key")
-        page.get_by_role("button", name="Gunakan key", exact=True).click()
-        expect(page.locator("#accessStatus")).to_have_text("Key aktif di tab ini")
-        page.locator("#accessControl summary").click()
-        page.locator("#logoutButton").click()
-        page.locator("#accessControl summary").click()
-        page.keyboard.press("Escape")
-        assert not page.locator("#accessControl").evaluate("el=>el.open")
-        log.append("Workspace access: submit fixture key, logout, Escape dismisses")
+        expect(page.locator("#accessStatus")).to_have_text("admin")
+        expect(page.locator("#logoutButton")).to_be_enabled()
+        log.append("Workspace identity: username visible and logout control enabled; live authentication verified separately")
 
         nav("brand")
         page.locator('#brandForm [name="name"]').fill("[Data uji] Perusahaan")

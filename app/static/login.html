@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Masuk | Local RAG</title>
+  <link rel="stylesheet" href="/static/styles.css?v=16">
+  <script src="/static/login.js" defer></script>
+</head>
+<body class="login-page">
+  <main class="login-layout">
+    <div class="login-heading"><a class="login-wordmark" href="/">Local <strong>RAG</strong></a><button class="workspace-button" id="loginTheme" type="button">Mode gelap</button></div>
+    <section class="panel login-panel" aria-labelledby="loginTitle">
+      <h1 id="loginTitle">Masuk ke workspace</h1>
+      <p>Akses knowledge perusahaan dan kelola konten Anda.</p>
+      <form id="loginForm" class="workspace-form">
+        <label class="field"><span>Username</span><input name="username" autocomplete="username" required maxlength="100" autofocus></label>
+        <label class="field"><span>Password</span><input id="loginPassword" name="password" type="password" autocomplete="current-password" required maxlength="1024"></label>
+        <label class="workspace-check"><input id="showPassword" type="checkbox" aria-controls="loginPassword"> Tampilkan password</label>
+        <p id="loginError" class="workspace-error" role="alert" hidden></p>
+        <button class="primary-button" id="loginSubmit" type="submit">Masuk</button>
+      </form>
+    </section>
+  </main>
+</body>
+</html>

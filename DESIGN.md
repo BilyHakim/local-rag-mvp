@@ -1,5 +1,12 @@
 # Workspace design direction
 
+Login: retain ENERGY 2 / RHYTHM 2 / MOTION 1, the teal wordmark, system type and
+cream submit action. A single narrow form on the existing canvas asks only for
+username and password. Visible labels, autocomplete, password visibility, inline
+errors and a submit loading state serve sign-in. Use the saved light/dark theme
+with a working toggle. The authenticated utility bar shows identity and logout.
+No new assets or decorative claims; mobile padding follows existing scale.
+
 Planner return navigation: show a native secondary "Kembali ke Content planner"
 button above the editor when a post was opened from the list. Preserve the list
 scroll position and return keyboard focus to that post's manage button. Opening
