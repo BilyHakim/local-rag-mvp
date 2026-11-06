@@ -380,14 +380,19 @@ async function loadModels(selectId = 'llmModel', refreshId = 'refreshModels', st
   }
 }
 const loadSocialModels = () => loadModels('socialModel', 'refreshSocialModels', 'socialModelStatus');
+const loadCampaignModels = () => loadModels('campaignModel', 'refreshCampaignModels', 'campaignModelStatus');
 qs('#refreshModels').addEventListener('click', () => loadModels());
 qs('#refreshSocialModels').addEventListener('click', loadSocialModels);
+qs('#refreshCampaignModels').addEventListener('click', loadCampaignModels);
 document.addEventListener('workspace-identity-changed', () => {
   qs('#llmModel').replaceChildren(new Option('Default server', ''));
   qs('#socialModel').replaceChildren(new Option('Default server', ''));
+  qs('#campaignModel').replaceChildren(new Option('Default server', ''));
   loadModels();
   loadSocialModels();
+  loadCampaignModels();
 });
 loadModels();
 loadSocialModels();
+loadCampaignModels();
 checkHealth();

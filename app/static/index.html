@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="Workspace untuk knowledge perusahaan, audit SEO, dan produksi konten social media.">
   <title>Company AI Workspace</title>
-  <link rel="stylesheet" href="/static/styles.css?v=13">
+  <link rel="stylesheet" href="/static/styles.css?v=15">
 </head>
 <body>
   <a class="skip-link" href="#mainContent">Langsung ke area kerja</a>
@@ -210,6 +210,7 @@
           <div class="workspace-intro"><p>Buat materi sesuai brief, gunakan referensi perusahaan, lalu tinjau sebelum publikasi.</p></div>
           <details class="workspace-status"><summary>Koneksi workspace <span class="connection-caption" data-connection-caption>Memuat status...</span></summary><div class="connection-items" data-workspace-status role="status">Memuat konfigurasi...</div></details>
           <div class="workspace-tabs" role="group" aria-label="Mode Social Media"><button type="button" class="active" data-social-tab="manual" aria-pressed="true" aria-controls="socialManual">Buat konten</button><button type="button" data-social-tab="planner" aria-pressed="false" aria-controls="socialPlanner">Content planner</button></div>
+          <div id="plannerReturn" class="planner-return" hidden><button class="workspace-button" id="backToPlanner" type="button">Kembali ke Content planner</button><span id="plannerReturnHint" class="empty-note" role="status"></span></div>
           <div id="socialManual" class="workspace-grid workspace-results">
             <div>
               <form id="socialForm" class="panel workspace-form brief-panel">
@@ -269,7 +270,24 @@
             </div>
           </div>
           <div id="socialPlanner" hidden>
-            <div class="section-intro"><div><h2>Rencana publikasi</h2><p>Materi yang disetujui dapat terbit otomatis sesuai jadwal WIB. Server dan scheduler harus tetap berjalan.</p></div><button class="workspace-button" id="refreshPlanner" type="button">Muat ulang</button></div>
+            <div class="section-intro"><div><h2>Kampanye otomatis</h2><p>Tentukan tema dan jadwal. Agent menyiapkan konten berbeda untuk tiap slot, lalu menerbitkannya sesuai pengaturan.</p></div><button class="workspace-button" id="refreshPlanner" type="button">Muat ulang</button></div>
+            <form id="campaignForm" class="panel workspace-form campaign-form">
+              <label class="field campaign-wide"><span>Tema dan arahan kampanye</span><textarea name="theme" rows="3" required minlength="3" maxlength="8000" placeholder="Tema, target audiens, pesan utama, gaya bahasa, dan batasan konten"></textarea></label>
+              <label class="field"><span>Kanal publikasi</span><select name="channel"><option value="instagram">Instagram</option><option value="website">Website (WordPress)</option></select></label>
+              <div class="field"><label for="campaignModel">Model teks</label><div class="social-model-controls"><select id="campaignModel" name="model" aria-describedby="campaignModelStatus" disabled><option value="">Default server</option></select><button class="workspace-button" type="button" id="refreshCampaignModels" aria-label="Muat ulang model kampanye" title="Muat ulang model kampanye"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5"/><path d="M6.1 7a7 7 0 0 1 11.6-1L20 9M4 15l2.3 3A7 7 0 0 0 17.9 17"/></svg></button></div><p id="campaignModelStatus" class="empty-note" role="status"></p></div>
+              <label class="field"><span>Publikasi pertama (WIB / UTC+7)</span><input name="first_publish_at" type="datetime-local" required></label>
+              <label class="field"><span>Interval publikasi</span><select name="interval_hours"><option value="24">Setiap hari</option><option value="48">Setiap 2 hari</option><option value="168">Setiap minggu</option><option value="1">Setiap jam</option></select></label>
+              <label class="field"><span>Jumlah posting</span><input name="count" type="number" min="1" max="30" value="7" required></label>
+              <label class="field"><span>Mode gambar</span><select name="image_mode" aria-describedby="campaignImageHint"><option value="manual">Manual: unggah gambar sendiri</option><option value="automatic">Otomatis: buat dengan AI</option></select></label>
+              <p id="campaignImageHint" class="empty-note campaign-wide">Manual adalah pilihan awal. Caption dibuat otomatis; tiap posting Instagram menunggu gambar Anda sebelum terbit. Mode otomatis memerlukan provider gambar AI.</p>
+              <label class="workspace-check campaign-wide"><input name="use_knowledge" type="checkbox" checked> Gunakan knowledge perusahaan</label>
+              <p id="campaignSchedulePreview" class="empty-note campaign-wide" role="status">Isi jadwal pertama untuk melihat rentang publikasi.</p>
+              <p class="empty-note campaign-wide">Setelah diaktifkan, konten siap terbit otomatis tanpa persetujuan per posting. Jika gambar diunggah atau kampanye dilanjutkan setelah jadwal lewat, posting dapat terbit pada pemeriksaan scheduler berikutnya. Jeda menghentikan antrean berikutnya; publikasi yang sudah diproses dapat tetap selesai.</p>
+              <button class="primary-button campaign-wide" id="activateCampaign" type="submit">Aktifkan kampanye otomatis</button>
+              <p id="campaignRuntimeStatus" class="empty-note campaign-wide" role="status"></p>
+            </form>
+            <div id="campaignList" class="planner-list" aria-live="polite"></div>
+            <div class="section-intro"><div><h2>Semua posting</h2><p>Kelola hasil agent, unggah gambar untuk slot manual, atau buka kembali posting satuan.</p></div></div>
             <div id="plannerList" class="planner-list" aria-live="polite"></div>
           </div>
         </div>
@@ -277,7 +295,7 @@
     </main>
   </div>
   <div class="toast" id="toast" role="status"></div>
-  <script src="/static/app.js?v=8"></script>
-  <script src="/static/workspace.js?v=3"></script>
+  <script src="/static/app.js?v=9"></script>
+  <script src="/static/workspace.js?v=5"></script>
 </body>
 </html>

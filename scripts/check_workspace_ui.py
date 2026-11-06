@@ -41,7 +41,7 @@ def main():
     output = Path(args.output)
     output.mkdir(parents=True, exist_ok=True)
     log, errors, contrast_results = [], [], []
-    state = {"profile": {}, "posts": {}, "audits": [], "publishes": 0}
+    state = {"profile": {}, "posts": {}, "campaigns": {}, "audits": [], "publishes": 0}
     buffer = io.BytesIO()
     Image.new("RGB", (1024, 1024), "#0F42C0").save(buffer, "JPEG")
 
@@ -92,6 +92,24 @@ def main():
                 response = state["audits"]
         elif "/seo/audits/" in path:
             response = state["audits"][-1]
+        elif path.endswith("/social/campaigns"):
+            if request.method == "POST":
+                campaign_id = "d" * 32
+                response = {**data, "id": campaign_id, "revision": 1, "status": "active", "progress": {"awaiting_image": data["count"]}}
+                state["campaigns"][campaign_id] = response
+                for index in range(data["count"]):
+                    post_id = f"{index + 100:032x}"
+                    state["posts"][post_id] = {"id": post_id, "revision": 1, "status": "awaiting_image", "campaign_id": campaign_id,
+                        "channel": data["channel"], "title": f"[Data uji] Slot {index + 1}", "caption": "Konten fixture untuk pengujian kampanye.",
+                        "image_prompt": "", "hashtags": [], "history": [], "warnings": [], "sources": [], "notes": "", "image_id": None,
+                        "scheduled_at": data["first_publish_at"]}
+            else:
+                response = list(state["campaigns"].values())
+        elif "/social/campaigns/" in path:
+            campaign_id, action = path.split("/social/campaigns/")[1].split("/")
+            response = state["campaigns"][campaign_id]
+            response["status"] = "paused" if action == "pause" else "active"
+            response["revision"] += 1
         elif path.endswith("/social/generate"):
             state.setdefault("social_models", []).append(data.get("model"))
             post_id = data.get("post_id") or "a" * 32
@@ -124,7 +142,7 @@ def main():
                     post.update({k: v for k, v in data.items() if k != "revision"})
                     post["status"] = "draft"
                 elif action in {"image", "image-upload"}:
-                    post.update(image_id="c" * 32, status="draft")
+                    post.update(image_id="c" * 32, status="scheduled" if post.get("campaign_id") else "draft")
                 elif action == "approve":
                     post["status"] = "approved"
                 elif action == "schedule":
@@ -191,6 +209,13 @@ def main():
                         expect(page.locator("#resizeComposer")).to_have_attribute("aria-expanded", "false")
                         page.screenshot(path=str(output / f"chat-{width}-{theme}.png"), full_page=True)
                 nav("social")
+                page.locator('[data-social-tab="planner"]').click()
+                expect(page.locator('#campaignForm [name="image_mode"]')).to_have_value("manual")
+                expect(page.locator("#campaignModel")).to_be_enabled()
+                check_layout(f"planner-{width}-{theme}")
+                page.screenshot(path=str(output / f"planner-{width}-{theme}.png"), full_page=True)
+                page.locator('[data-social-tab="manual"]').click()
+                expect(page.locator("#plannerReturn")).to_be_hidden()
                 expect(page.locator("#socialModel")).to_be_enabled()
                 page.locator("#socialModel").select_option("model-lain")
                 page.locator("#refreshSocialModels").click()
@@ -301,6 +326,70 @@ def main():
         page.locator("#newSocial").click()
         log.append("Social model: keyboard select, refresh preserves choice at all widths/themes, create/revise sends chosen model, empty/error uses default, retry recovers")
         log.append("Social: channel, brief, generate, edit/save, revise, image, approve, schedule, cancel, publish/uncertain, reconcile, planner, refresh, open, new")
+
+        page.locator('[data-social-tab="planner"]').click()
+        page.locator('#campaignForm [name="theme"]').fill("[Data uji] Edukasi operasional kapal")
+        page.locator('#campaignForm [name="first_publish_at"]').fill(future)
+        page.locator('#campaignForm [name="count"]').fill("2")
+        page.locator('#campaignForm [name="interval_hours"]').select_option("48")
+        page.locator('#campaignForm [name="image_mode"]').select_option("automatic")
+        page.locator('#campaignForm [name="image_mode"]').select_option("manual")
+        page.locator('#campaignForm [name="use_knowledge"]').uncheck()
+        page.locator("#campaignModel").select_option("model-lain")
+        page.locator("#refreshCampaignModels").click()
+        expect(page.locator("#campaignModel")).to_have_value("model-lain")
+        expect(page.locator("#campaignSchedulePreview")).to_contain_text("2 posting")
+        page.locator("#activateCampaign").focus()
+        page.keyboard.press("Enter")
+        expect(page.locator("#campaignList")).to_contain_text("Aktif")
+        assert state["campaigns"]["d" * 32]["model"] == "model-lain"
+        assert state["campaigns"]["d" * 32]["first_publish_at"].endswith("+07:00")
+        page.get_by_role("button", name="Jeda kampanye", exact=True).click()
+        expect(page.locator("#campaignList")).to_contain_text("Dijeda")
+        page.get_by_role("button", name="Lanjutkan kampanye", exact=True).click()
+        expect(page.locator("#campaignList")).to_contain_text("Aktif")
+        page.locator('[data-post-id="' + f"{100:032x}" + '"]').click()
+        expect(page.locator("#postStatus")).to_contain_text("Menunggu gambar")
+        expect(page.locator("#publishPost")).to_be_disabled()
+        page.locator("#postImageFile").set_input_files({"name": "fixture.jpg", "mimeType": "image/jpeg", "buffer": buffer.getvalue()})
+        page.locator("#uploadPostImage").click()
+        expect(page.locator("#postStatus")).to_contain_text("Terjadwal")
+        page.locator("#backToPlanner").click()
+        expect(page.locator("#socialPlanner")).to_be_visible()
+        for width in (360, 768, 1024, 1440):
+            page.set_viewport_size({"width": width, "height": 1000})
+            for theme in ("light", "dark"):
+                if page.locator("html").get_attribute("data-theme") != theme:
+                    if width <= 760:
+                        page.locator(".view.active .mobile-menu").click()
+                    page.locator("#themeToggle").click()
+                    if width <= 760:
+                        page.keyboard.press("Escape")
+                manage = page.locator('[data-post-id="' + f"{100:032x}" + '"]')
+                manage.scroll_into_view_if_needed()
+                before = page.evaluate("window.scrollY")
+                manage.click()
+                expect(page.locator("#backToPlanner")).to_be_focused()
+                check_layout(f"planner-editor-return-{width}-{theme}")
+                page.screenshot(path=str(output / f"planner-editor-{width}-{theme}.png"), full_page=True)
+                page.keyboard.press("Enter")
+                expect(page.locator("#socialPlanner")).to_be_visible()
+                expect(manage).to_be_focused()
+                assert abs(page.evaluate("window.scrollY") - before) <= 2
+        manage.click()
+        page.locator('#postEditor [name="caption"]').fill("Perubahan editor yang belum disimpan")
+        page.locator("#backToPlanner").click()
+        page.locator('[data-post-id="' + f"{101:032x}" + '"]').click()
+        expect(page.locator("#toast")).to_contain_text("Simpan perubahan")
+        expect(page.locator("#socialPlanner")).to_be_visible()
+        manage.click()
+        expect(page.locator('#postEditor [name="caption"]')).to_have_value("Perubahan editor yang belum disimpan")
+        page.locator("#saveDraft").click()
+        expect(page.locator("#postStatus")).not_to_contain_text("belum disimpan")
+        page.locator("#newSocial").click()
+        expect(page.locator("#plannerReturn")).to_be_hidden()
+        log.append("Planner return: explicit back button, keyboard focus and scroll restored at four widths/both themes, unsaved text retained and another post protected, new draft hides return")
+        log.append("Campaign: default manual images, theme/model/interval/count/WIB preview, keyboard activation, pause/resume, waiting-image gate and upload to scheduled")
 
         nav("seo")
         page.locator('#seoForm [name="url"]').fill("https://example.org/fixture")

@@ -101,9 +101,40 @@ URL private, loopback, link-local, kredensial di URL, dan port selain 80/443 dit
 6. Tinjau materi, lalu pilih **Setujui versi ini**.
 7. Pilih **Terbitkan sekarang** atau setel jadwal WIB pada versi yang disetujui.
 
-Planner otomatis menerbitkan **materi final yang sudah disetujui**. Belum ada
-pembuatan konten dari tema berulang lalu langsung publish tanpa review. Tiap item
-mewakili satu kanal; buat draft terpisah untuk adaptasi website dan Instagram.
+Posting satuan tetap memerlukan persetujuan. Content planner juga mendukung
+**kampanye otomatis dari tema**: pilih model teks, kanal, jadwal pertama dalam WIB,
+interval (per jam, harian, dua harian, mingguan), jumlah 1 sampai 30 posting, mode
+gambar dan penggunaan knowledge. Klik **Aktifkan kampanye otomatis** untuk
+mengizinkan generasi serta publikasi tanpa persetujuan per posting.
+
+Agent membuat caption segera setelah kampanye aktif, maksimal dua slot per putaran
+generasi. Publikasi berjalan pada loop terpisah agar request AI yang lambat tidak
+menahan pemeriksaan posting yang sudah siap. Riwayat konten tenant menjadi konteks
+dan pembanding: caption yang identik atau terlalu mirip dibuat ulang maksimal tiga
+kali, lalu slot menjadi gagal jika belum memenuhi pemeriksaan. Pemeriksaan memakai
+normalisasi teks, kemiripan urutan dan tumpang tindih kata pada maksimal 10.000
+posting terbaru; ini bukan jaminan bahwa semua makna atau ide pasti berbeda.
+Prompt menggunakan 60 caption terbaru sebagai konteks, beserta angle tiap slot.
+Model memakai adapter AI yang sama, termasuk konfigurasi Command Code yang ada.
+
+**Mode gambar Manual adalah default.** Buka slot melalui **Buka / kelola** untuk
+mengunggah gambar sendiri, sebelum atau sesudah caption dibuat. Slot tanpa gambar
+berstatus **Menunggu gambar** dan tidak dipublikasikan. Setelah caption dan gambar
+tersedia, slot otomatis masuk antrean jadwal. Mode **Otomatis** memerlukan
+`IMAGE_API_KEY` dan `IMAGE_MODEL`, lalu membuat gambar untuk setiap slot.
+Instagram tetap memerlukan URL media HTTPS publik serta signing key dan token.
+
+Kampanye dapat dijeda/dilanjutkan. Jeda mencegah generasi berikutnya dan pengambilan
+posting berikutnya; request AI atau publikasi yang sudah dimulai dapat tetap
+selesai. Jika jadwal terlewat ketika server mati, kampanye dijeda, atau gambar
+belum tersedia, posting siap dapat terbit pada pemeriksaan berikutnya setelah
+syaratnya terpenuhi. Ini dapat memproses beberapa posting yang terlambat.
+Generasi yang gagal/terputus dan publikasi berstatus tidak pasti tidak diulang
+secara otomatis. Periksa slot melalui editor; hasil publish ambigu tetap memakai
+rekonsiliasi. Daftar planner diperbarui setiap 15 detik saat tab terlihat dan
+operator tidak sedang memfokuskan kontrol pada daftar.
+
+Tiap item mewakili satu kanal; buat kampanye terpisah untuk website dan Instagram.
 Setiap perubahan teks, revisi AI, atau pembuatan gambar membatalkan persetujuan
 dan jadwal. Pembatalan jadwal mengembalikan posting menjadi draft. Posting yang
 sudah terbit tidak diedit/dihapus dari platform melalui aplikasi ini.
@@ -156,13 +187,24 @@ Untuk prototype lokal tanpa domain, unduh executable cloudflared resmi, lalu:
 ```
 
 Launcher memakai konfigurasi aplikasi tanpa mencetak secret, memilih Unified Login
-untuk koneksi `local`, mematikan scheduler, memeriksa identitas, dan membuat draft
+untuk koneksi `local`, mematikan scheduler secara default, memeriksa identitas, dan membuat draft
 uji dengan `assets/instagram/thumbnail-tes-integrasi.png` satu kali. Tidak ada
 panggilan LLM atau gambar AI. UI tersedia di port 8011; tunnel hanya membuka
 gateway media di 8012, bukan UI/API. URL publik dan signing key diatur di memori
 proses; `.env` tidak diubah. Endpoint publik lain mengembalikan 404. Tutup proses
 untuk menutup tunnel. Token tetap hanya di server. Quick Tunnel adalah fasilitas
 pengujian sementara, bukan deployment produksi.
+
+Untuk kampanye otomatis atau jadwal publikasi, hentikan launcher lama lalu jalankan:
+
+```powershell
+.\.venv\Scripts\python.exe -B scripts/run_instagram_prototype.py --cloudflared storage/tools/cloudflared.exe --enable-scheduler
+```
+
+Gunakan UI pada port **8011**, dan biarkan terminal/tunnel tetap berjalan. Flag
+tersebut mengaktifkan scheduler pada proses launcher; `.env` tidak diubah.
+Kampanye aktif yang tersimpan akan dilanjutkan ketika scheduler hidup kembali.
+Kampanye yang ingin ditunda dapat dijeda dari planner sebelum server dihentikan.
 
 Di UI, buka draft **Tes integrasi Instagram** di planner, periksa materi, klik
 **Setujui versi ini**, lalu **Terbitkan sekarang**. Post dengan status `published`

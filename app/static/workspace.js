@@ -1,8 +1,10 @@
 (() => {
   let selected = null, dirty = false, busy = false, previewUrl = null, currentAudit = null;
   let identityEpoch = 0;
+  let schedulerEnabled = false;
+  let plannerOrigin = null;
   const base = '/api/workspace';
-  const labels = { draft: 'Draft', approved: 'Disetujui', scheduled: 'Terjadwal', publishing: 'Menerbitkan', published: 'Terbit', failed: 'Gagal', uncertain: 'Perlu diperiksa' };
+  const labels = { draft: 'Draft', approved: 'Disetujui', scheduled: 'Terjadwal', publishing: 'Menerbitkan', published: 'Terbit', failed: 'Gagal', uncertain: 'Perlu diperiksa', queued: 'Antrean generasi', generating: 'Membuat konten', awaiting_image: 'Menunggu gambar' };
   const json = (body, method = 'POST') => ({ method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   const date = value => value ? new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Jakarta' }).format(new Date(value)) + ' WIB' : 'Belum dijadwalkan';
   const readable = value => escapeHtml(value ?? '');
@@ -36,6 +38,11 @@
     const epoch = identityEpoch;
     const s = await api(base + '/status');
     if (epoch !== identityEpoch) return;
+    schedulerEnabled = s.scheduler_enabled;
+    qs('#campaignRuntimeStatus').textContent = schedulerEnabled
+      ? 'Scheduler aktif. Server dan koneksi publik harus tetap berjalan selama kampanye.'
+      : 'Scheduler nonaktif. Aktifkan SCHEDULER_ENABLED atau jalankan launcher dengan --enable-scheduler.';
+    refreshActions();
     const entries = [
       ['Model teks', `${s.text_provider === 'ollama' ? 'Ollama lokal' : 'API'} / ${s.text_model}`],
       ['Gambar', s.image_configured ? 'Dikonfigurasi' : 'Belum dikonfigurasi'],
@@ -130,16 +137,20 @@
   }
 
   function refreshActions() {
-    const editable = !!selected && ['draft', 'approved', 'scheduled', 'failed'].includes(selected.status);
+    qs('#backToPlanner').disabled = busy;
+    qs('#plannerReturnHint').textContent = dirty ? 'Perubahan belum disimpan. Buka kembali posting ini untuk melanjutkan penyuntingan.' : '';
+    const editable = !!selected && ['draft', 'approved', 'scheduled', 'failed', 'awaiting_image'].includes(selected.status);
+    const uploadable = editable || selected?.status === 'queued';
     qs('#saveDraft').disabled = busy || !editable || !dirty;
     qs('#generateImage').disabled = busy || !editable || dirty;
-    qs('#postImageFile').disabled = busy || !editable || dirty;
-    qs('#uploadPostImage').disabled = busy || !editable || dirty;
+    qs('#postImageFile').disabled = busy || !uploadable || dirty;
+    qs('#uploadPostImage').disabled = busy || !uploadable || dirty;
+    qs('#activateCampaign').disabled = busy || !schedulerEnabled;
     qs('#manualSocial').disabled = busy;
     qs('#approvePost').disabled = busy || dirty || !selected || !['draft', 'failed'].includes(selected.status);
     qs('#publishPost').disabled = busy || dirty || selected?.status !== 'approved';
     qs('#schedulePost').disabled = busy || dirty || selected?.status !== 'approved';
-    qs('#generateSocial').disabled = busy || (!!selected && !editable);
+    qs('#generateSocial').disabled = busy || (!!selected && (!editable || selected.status === 'awaiting_image'));
     qs('#socialForm').elements.channel.disabled = !!selected || busy;
     qs('#seoForm button[type=submit]').disabled = busy;
     qs('#brandForm button[type=submit]').disabled = busy;
@@ -150,11 +161,13 @@
     qs('#resolveForm').hidden = selected?.status !== 'uncertain';
     qs('#resolveForm button').disabled = busy;
     qs('#postStatus').textContent = selected ? `${labels[selected.status]} · v${selected.revision}${dirty ? ' · belum disimpan' : ''}` : 'Belum ada draft';
-    qs('#postMessage').textContent = selected ? [selected.error, selected.scheduled_at ? date(selected.scheduled_at) : '', dirty ? 'Simpan perubahan sebelum membuat gambar atau menyetujui versi ini.' : 'Perubahan materi membatalkan persetujuan dan jadwal.', selected.status === 'published' ? `ID publikasi: ${selected.external_id || '-'}` : ''].filter(Boolean).join(' ') : 'Buat draft untuk mulai mengedit dan menyiapkan publikasi.';
+    qs('#postMessage').textContent = selected ? [selected.error, selected.scheduled_at ? date(selected.scheduled_at) : '', selected.status === 'queued' ? 'Agent akan membuat caption. Anda bisa mengunggah gambar untuk slot ini sekarang.' : selected.status === 'awaiting_image' ? 'Unggah gambar untuk melanjutkan publikasi otomatis pada jadwal ini. Jadwal yang sudah lewat diproses pada pemeriksaan berikutnya.' : dirty ? 'Simpan perubahan sebelum membuat gambar atau menyetujui versi ini.' : 'Perubahan materi membatalkan persetujuan dan jadwal.', selected.status === 'published' ? `ID publikasi: ${selected.external_id || '-'}` : ''].filter(Boolean).join(' ') : 'Buat draft untuk mulai mengedit dan menyiapkan publikasi.';
     if (selected && ['approved', 'scheduled', 'uncertain', 'failed'].includes(selected.status)) qs('#publicationSection').open = true;
   }
 
   function resetPost() {
+    plannerOrigin = null;
+    qs('#plannerReturn').hidden = true;
     selected = null; dirty = false;
     qs('#postEditor').reset(); qs('#socialForm').reset(); qs('#scheduleForm').reset();
     qs('#socialBriefTitle').textContent = 'Mulai dengan brief';
@@ -166,6 +179,7 @@
 
   function tab(name) {
     qs('#socialManual').hidden = name !== 'manual'; qs('#socialPlanner').hidden = name !== 'planner';
+    qs('#plannerReturn').hidden = name !== 'manual' || !plannerOrigin;
     qsa('[data-social-tab]').forEach(b => {
       const active = b.dataset.socialTab === name;
       b.classList.toggle('active', active);
@@ -177,6 +191,17 @@
     if (button.dataset.socialTab === 'planner') loadPosts().catch(e => showToast(e.message));
   }));
   qs('#newSocial').addEventListener('click', () => { resetPost(); tab('manual'); });
+  qs('#backToPlanner').addEventListener('click', () => {
+    if (busy || !plannerOrigin) return;
+    tab('planner');
+    const button = qs(`[data-post-id="${plannerOrigin.postId}"]`);
+    (button || qs('[data-social-tab="planner"]')).focus({ preventScroll: true });
+    window.scrollTo({ top: plannerOrigin.scrollY, behavior: 'instant' });
+    if (button) {
+      const bounds = button.getBoundingClientRect();
+      if (bounds.top < 0 || bounds.bottom > window.innerHeight) button.closest('article').scrollIntoView({ block: 'center', behavior: 'instant' });
+    }
+  });
   qs('#manualSocial').addEventListener('click', event => {
     if (dirty) { showToast('Simpan perubahan editor sebelum membuat draft baru.'); return; }
     run(event.currentTarget, async epoch => {
@@ -198,7 +223,7 @@
       const post = await api(`${base}/social/posts/${selected.id}/image-upload`, { method: 'POST', body });
       if (epoch !== identityEpoch) return;
       event.target.reset(); await renderPost(post); await loadPosts();
-      showToast('Gambar diunggah. Tinjau dan setujui versi ini sebelum menerbitkan.');
+      showToast(post.campaign_id && ['queued', 'scheduled'].includes(post.status) ? 'Gambar tersimpan untuk slot kampanye otomatis.' : 'Gambar diunggah. Tinjau dan setujui versi ini sebelum menerbitkan.');
     });
   });
   qs('#postEditor').addEventListener('input', () => { dirty = true; refreshActions(); });
@@ -251,25 +276,88 @@
     postAction('resolve', event.submitter, Object.fromEntries(new FormData(event.target)));
   });
 
-  async function loadPosts() {
+  async function loadPosts(quiet = false) {
     const epoch = identityEpoch;
-    qs('#plannerList').textContent = 'Memuat rencana publikasi...';
-    const posts = await api(base + '/social/posts');
+    if (!quiet) qs('#plannerList').textContent = 'Memuat rencana publikasi...';
+    const [posts, campaigns] = await Promise.all([api(base + '/social/posts'), api(base + '/social/campaigns')]);
     if (epoch !== identityEpoch) return;
+    qs('#campaignList').innerHTML = campaigns.length ? campaigns.map(c => {
+      const progress = Object.entries(c.progress || {}).map(([key, count]) => `${labels[key] || key}: ${count}`).join(' · ');
+      const finished = Object.values(c.progress || {}).reduce((sum, n) => sum + n, 0) === c.count &&
+        Object.keys(c.progress || {}).every(key => ['published', 'failed', 'uncertain'].includes(key));
+      const state = finished ? (c.progress.published === c.count ? 'Selesai' : 'Perlu diperiksa') : c.status === 'active' ? 'Aktif' : 'Dijeda';
+      return `<article class="panel campaign-card"><div class="workspace-row"><h3>${readable(c.theme)}</h3><span class="post-badge">${state}</span></div><p>${readable(c.channel)} · ${c.count} posting · setiap ${c.interval_hours} jam · gambar ${c.image_mode === 'manual' ? 'manual' : 'otomatis'}</p><p>Mulai ${readable(date(c.first_publish_at))}</p><p>Model: ${readable(c.model || 'Default server')}</p><p>${readable(progress)}</p>${finished ? '' : `<div class="workspace-actions"><button class="workspace-button" type="button" data-campaign-id="${readable(c.id)}" data-revision="${c.revision}" data-action="${c.status === 'active' ? 'pause' : 'resume'}">${c.status === 'active' ? 'Jeda kampanye' : 'Lanjutkan kampanye'}</button></div>`}</article>`;
+    }).join('') : '<div class="panel"><h3>Belum ada kampanye otomatis</h3><p class="empty-note">Isi tema dan jadwal di atas untuk membuat antrean konten.</p></div>';
     qs('#plannerList').innerHTML = posts.length ? posts.map(p => {
       const link = safeLink(p.external_url);
       return `<article class="panel planner-card"><div><span class="post-badge">${readable(labels[p.status])}</span> <small>${readable(p.channel)}</small><h3>${readable(p.title)}</h3><p>${readable(p.caption.slice(0, 240))}${p.caption.length > 240 ? '…' : ''}</p><p>${readable(date(p.scheduled_at))}</p>${p.error ? `<p class="workspace-error">${readable(p.error)}</p>` : ''}${link ? `<a href="${readable(link)}" target="_blank" rel="noopener noreferrer">Lihat posting</a>` : ''}</div><button class="workspace-button" data-post-id="${readable(p.id)}" type="button">Buka / kelola</button></article>`;
-    }).join('') : '<div class="panel"><h3>Rencana publikasi masih kosong</h3><p class="empty-note">Mulai dari tab Buat konten. Setelah materi ditinjau dan disetujui, tetapkan jadwal publikasinya di editor.</p></div>';
+    }).join('') : '<div class="panel"><h3>Belum ada posting</h3><p class="empty-note">Aktifkan kampanye di atas atau buat posting satuan dari tab Buat konten.</p></div>';
   }
-  qs('#refreshPlanner').addEventListener('click', e => run(e.currentTarget, loadPosts));
-  qs('#plannerList').addEventListener('click', event => {
-    const button = event.target.closest('[data-post-id]');
+  qs('#refreshPlanner').addEventListener('click', e => run(e.currentTarget, async () => { await status(); await loadPosts(); }));
+  const campaignForm = qs('#campaignForm');
+  function previewCampaign() {
+    const f = campaignForm.elements;
+    if (!f.first_publish_at.value || !f.count.value) {
+      qs('#campaignSchedulePreview').textContent = 'Isi jadwal pertama untuk melihat rentang publikasi.';
+      return;
+    }
+    if (!f.first_publish_at.validity.valid || !f.count.validity.valid) {
+      qs('#campaignSchedulePreview').textContent = 'Gunakan jadwal yang valid dan jumlah 1 sampai 30 posting.';
+      return;
+    }
+    const first = new Date(f.first_publish_at.value + ':00+07:00');
+    const last = new Date(first.getTime() + (Number(f.count.value) - 1) * Number(f.interval_hours.value) * 3600000);
+    if (!Number.isFinite(first.getTime()) || !Number.isFinite(last.getTime())) {
+      qs('#campaignSchedulePreview').textContent = 'Jadwal berada di luar rentang tanggal yang didukung.';
+      return;
+    }
+    qs('#campaignSchedulePreview').textContent = `${f.count.value} posting: ${date(first.toISOString())} sampai ${date(last.toISOString())}.`;
+  }
+  campaignForm.addEventListener('input', previewCampaign);
+  campaignForm.addEventListener('submit', event => {
+    event.preventDefault();
+    run(event.submitter, async epoch => {
+      const f = campaignForm.elements;
+      await api(base + '/social/campaigns', json({ theme: f.theme.value, channel: f.channel.value,
+        model: f.model.value || null, image_mode: f.image_mode.value, use_knowledge: f.use_knowledge.checked,
+        first_publish_at: f.first_publish_at.value + ':00+07:00', interval_hours: Number(f.interval_hours.value), count: Number(f.count.value) }));
+      if (epoch !== identityEpoch) return;
+      await loadPosts(); showToast('Kampanye aktif. Agent akan menyiapkan konten melalui scheduler.');
+    });
+  });
+  qs('#campaignList').addEventListener('click', event => {
+    const button = event.target.closest('[data-campaign-id]');
     if (!button) return;
     run(button, async epoch => {
+      await api(`${base}/social/campaigns/${button.dataset.campaignId}/${button.dataset.action}`, json({ revision: Number(button.dataset.revision) }));
+      if (epoch === identityEpoch) await loadPosts();
+    });
+  });
+  setInterval(() => {
+    if (document.hidden || busy || !qs('#socialView').classList.contains('active') || qs('#socialPlanner').hidden ||
+        qs('#campaignList').contains(document.activeElement) || qs('#plannerList').contains(document.activeElement)) return;
+    loadPosts(true).catch(error => showToast(error.message));
+  }, 15000);
+  qs('#plannerList').addEventListener('click', async event => {
+    const button = event.target.closest('[data-post-id]');
+    if (!button) return;
+    if (busy) return;
+    if (dirty) {
+      if (selected?.id !== button.dataset.postId) { showToast('Simpan perubahan pada posting yang sedang diedit sebelum membuka posting lain.'); return; }
+      plannerOrigin = { postId: button.dataset.postId, scrollY: window.scrollY };
+      tab('manual'); qs('#backToPlanner').focus();
+      return;
+    }
+    const scrollY = window.scrollY;
+    await run(button, async epoch => {
       const post = await api(`${base}/social/posts/${button.dataset.postId}`);
       if (epoch !== identityEpoch) return;
-      await renderPost(post); tab('manual');
+      await renderPost(post);
+      if (epoch !== identityEpoch) return;
+      plannerOrigin = { postId: post.id, scrollY };
+      tab('manual');
     });
+    if (!qs('#socialManual').hidden && plannerOrigin?.postId === button.dataset.postId) qs('#backToPlanner').focus();
   });
 
   function loadView(view) {
@@ -290,8 +378,10 @@
   document.addEventListener('workspace-view-changed', event => loadView(event.detail.view));
   document.addEventListener('workspace-identity-changed', () => {
     identityEpoch++;
+    schedulerEnabled = false;
+    campaignForm.reset(); previewCampaign();
     resetPost(); currentAudit = null; qs('#brandForm').reset();
-    ['seoResult', 'seoHistory', 'plannerList'].forEach(id => { qs('#' + id).textContent = ''; });
+    ['seoResult', 'seoHistory', 'plannerList', 'campaignList'].forEach(id => { qs('#' + id).textContent = ''; });
     qsa('[data-workspace-status]').forEach(el => { el.textContent = 'Pilih menu untuk memuat workspace.'; });
     qs('#workspaceFeedback').hidden = true;
     loadView(qs('.nav-item.active').dataset.view);

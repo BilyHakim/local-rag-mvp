@@ -12,6 +12,8 @@ from app.services import workspace_store as store
 from app.services.specialist_service import audit_url, generate_social
 from app.api.chat import select_model
 from app.services.model_service import chat_model_context
+from app.schemas.workspace import CampaignRequest
+from app.services import campaign_service as campaigns
 from app.services.publishing_service import (connections, generate_image, image_path, publish_post,
                                    validate_publishable, validate_signature, upload_image, instagram_connection)
 
@@ -102,6 +104,27 @@ async def posts():
     return await asyncio.to_thread(store.list_records, "post")
 
 
+@router.get("/social/campaigns")
+async def list_campaigns():
+    return await campaigns.list_campaigns()
+
+
+@router.post("/social/campaigns")
+async def create_campaign(payload: CampaignRequest):
+    token = await select_model(payload.model)
+    try:
+        return await campaigns.create_campaign(payload)
+    finally:
+        chat_model_context.reset(token)
+
+
+@router.post("/social/campaigns/{record_id}/{action}")
+async def campaign_action(record_id: str, action: str, payload: RevisionRequest):
+    if action not in {"pause", "resume"}:
+        raise HTTPException(404, "Aksi tidak ditemukan")
+    return await campaigns.change_campaign(record_id, payload.revision, action)
+
+
 @router.get("/social/posts/{record_id}")
 async def post(record_id: str):
     return await asyncio.to_thread(store.get, "post", record_id)
@@ -113,7 +136,9 @@ async def edit_post(record_id: str, payload: PostEdit):
     data = dict(current, **payload.model_dump(exclude={"revision"}), error=None)
     # Text edits keep the existing preview image, but invalidate approval and schedule.
     return await asyncio.to_thread(store.update, "post", record_id, payload.revision, data,
-                                   allowed={"draft", "approved", "scheduled", "failed"})
+                                   status="awaiting_image" if current["status"] == "awaiting_image" else "draft",
+                                   scheduled_at=current["scheduled_at"] if current["status"] == "awaiting_image" else None,
+                                   allowed={"draft", "approved", "scheduled", "failed", "awaiting_image"})
 
 
 @router.post("/social/posts/{record_id}/image")

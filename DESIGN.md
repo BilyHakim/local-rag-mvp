@@ -1,5 +1,20 @@
 # Workspace design direction
 
+Planner return navigation: show a native secondary "Kembali ke Content planner"
+button above the editor when a post was opened from the list. Preserve the list
+scroll position and return keyboard focus to that post's manage button. Opening
+the editor focuses the return control so its location is clear. Unsaved edits
+stay in memory when returning; opening another post requires saving them first.
+Use existing spacing, colors and typography, with no new navigation destination.
+
+Automatic planner: retain ENERGY 2 / RHYTHM 2 / MOTION 1 and the editorial teal
+workspace. A labelled campaign form precedes the campaign list and existing post
+history. Theme spans the form; schedule, recurrence and image mode pair only when
+readable. Campaign status, progress and pause/resume sit together so operators can
+see what will publish. Manual images are the default; waiting posts explain the
+next upload action. The cream primary action explicitly activates automatic
+publication. No new assets, animations, decorative metrics or navigation.
+
 Social Media model selection follows ENERGY 2 / RHYTHM 2 / MOTION 1. Place a
 compact native "Model teks" select beside "Tulis tanpa AI" below generation,
 keeping secondary controls together without interrupting brief entry. Reuse white

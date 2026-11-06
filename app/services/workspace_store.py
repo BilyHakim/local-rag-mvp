@@ -73,6 +73,11 @@ def update(kind, record_id, revision, data, *, status="draft", scheduled_at=None
             raise KeyError(record_id)
         if row["revision"] != revision or (allowed is not None and row["status"] not in allowed):
             raise ValueError("Data/status telah berubah. Muat ulang sebelum melanjutkan.")
+        if status == "publishing" and data.get("campaign_id"):
+            campaign = db.execute("SELECT status FROM records WHERE tenant=? AND kind='campaign' AND id=?",
+                                  (tenant_context.get(), data["campaign_id"])).fetchone()
+            if not campaign or campaign["status"] != "active":
+                raise ValueError("Kampanye sedang dijeda")
         db.execute("UPDATE records SET revision=revision+1, status=?, scheduled_at=?, updated_at=?, data=? WHERE tenant=? AND kind=? AND id=?",
                    (status, scheduled_at, now_iso(), json.dumps(data, ensure_ascii=False), tenant_context.get(), kind, record_id))
     return get(kind, record_id)
@@ -96,3 +101,25 @@ def recover_stale_jobs():
     cutoff = (datetime.now(timezone.utc) - timedelta(minutes=15)).isoformat()
     with connection() as db:
         db.execute("UPDATE records SET status='uncertain',revision=revision+1,updated_at=? WHERE kind='post' AND status='publishing' AND updated_at<?", (now_iso(), cutoff))
+        db.execute("UPDATE records SET status='failed',revision=revision+1,updated_at=?,data=json_set(data,'$.error',?) WHERE kind='post' AND (status='generating' OR (status='awaiting_image' AND json_extract(data,'$.image_generation_pending')=1)) AND updated_at<?",
+                   (now_iso(), "Generasi terputus. Periksa slot; tidak diterbitkan otomatis.", cutoff))
+
+
+def create_campaign(data, slots):
+    campaign_id = uuid4().hex
+    with connection() as db:
+        db.execute("BEGIN IMMEDIATE")
+        db.execute("INSERT INTO records VALUES (?,?,?,?,?,?,?,?)",
+                   (tenant_context.get(), "campaign", campaign_id, 1, "active", None, now_iso(), json.dumps(data, ensure_ascii=False)))
+        for slot in slots:
+            due = slot.pop("scheduled_at")
+            slot["campaign_id"] = campaign_id
+            db.execute("INSERT INTO records VALUES (?,?,?,?,?,?,?,?)",
+                       (tenant_context.get(), "post", uuid4().hex, 1, "queued", due, now_iso(), json.dumps(slot, ensure_ascii=False)))
+    return get("campaign", campaign_id)
+
+
+def queued_campaign_jobs():
+    with connection() as db:
+        rows = db.execute("SELECT p.tenant,p.id FROM records p JOIN records c ON c.tenant=p.tenant AND c.kind='campaign' AND c.id=json_extract(p.data,'$.campaign_id') WHERE p.kind='post' AND p.status='queued' AND c.status='active' ORDER BY p.scheduled_at LIMIT 20").fetchall()
+    return [(row["tenant"], row["id"]) for row in rows]

@@ -69,6 +69,22 @@ class RevisionRequest(BaseModel):
     revision: int = Field(ge=1)
 
 
+class CampaignRequest(BaseModel):
+    theme: str = Field(min_length=3, max_length=8000)
+    model: str | None = Field(default=None, min_length=1, max_length=200)
+    channel: Literal["instagram", "website"] = "instagram"
+    image_mode: Literal["manual", "automatic"] = "manual"
+    use_knowledge: bool = True
+    first_publish_at: datetime
+    interval_hours: int = Field(default=24, ge=1, le=720)
+    count: int = Field(default=7, ge=1, le=30)
+
+    @field_validator("first_publish_at")
+    @classmethod
+    def future_aware(cls, value):
+        return ScheduleRequest.future_aware(value)
+
+
 class ScheduleRequest(RevisionRequest):
     scheduled_at: datetime
 

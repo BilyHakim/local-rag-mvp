@@ -1,4 +1,4 @@
-"""Explicitly approved publishing only. Ambiguous platform writes are never retried."""
+"""Publishing for approved posts and activated campaigns; ambiguous writes are never retried."""
 import asyncio
 import base64
 import hashlib
@@ -52,7 +52,7 @@ async def instagram_connection():
 
 async def upload_image(post_id, revision, raw):
     post = await asyncio.to_thread(store.get, "post", post_id)
-    allowed = {"draft", "approved", "scheduled", "failed"}
+    allowed = {"draft", "approved", "scheduled", "failed", "awaiting_image", "queued"}
     if post["revision"] != revision or post["status"] not in allowed:
         raise ValueError("Muat ulang draft sebelum mengunggah gambar")
     if not raw or len(raw) > min(settings.MAX_UPLOAD_BYTES, 10 * 1024 * 1024):
@@ -78,8 +78,11 @@ async def upload_image(post_id, revision, raw):
 
     try:
         await asyncio.to_thread(save)
+        campaign = bool(post.get("campaign_id")) and post["status"] in {"queued", "awaiting_image"}
+        status = ("queued" if post["status"] == "queued" else "scheduled") if campaign else "draft"
         return await asyncio.to_thread(store.update, "post", post_id, revision,
-                                       dict(post, image_id=image_id, error=None), allowed=allowed)
+                                       dict(post, image_id=image_id, error=None), allowed=allowed,
+                                       status=status, scheduled_at=post["scheduled_at"] if campaign else None)
     except BaseException:
         path.unlink(missing_ok=True)
         raise
@@ -113,7 +116,7 @@ def validate_signature(tenant, image_id, expires, signature):
 
 async def generate_image(post_id, revision):
     post = await asyncio.to_thread(store.get, "post", post_id)
-    if post["revision"] != revision or post["status"] not in {"draft", "approved", "scheduled", "failed"}:
+    if post["revision"] != revision or post["status"] not in {"draft", "approved", "scheduled", "failed", "awaiting_image"}:
         raise ValueError("Muat ulang draft sebelum membuat gambar")
     if not settings.IMAGE_API_KEY or not settings.IMAGE_MODEL:
         raise ValueError("Konfigurasikan IMAGE_API_KEY dan IMAGE_MODEL pada server")
@@ -141,8 +144,11 @@ async def generate_image(post_id, revision):
             image.convert("RGB").save(path, "JPEG", quality=90)
     await asyncio.to_thread(save)
     try:
-        return await asyncio.to_thread(store.update, "post", post_id, revision, dict(post, image_id=image_id, error=None),
-                                       allowed={"draft", "approved", "scheduled", "failed"})
+        campaign = bool(post.get("campaign_id")) and post["status"] == "awaiting_image"
+        return await asyncio.to_thread(store.update, "post", post_id, revision, dict(post, image_id=image_id, error=None, image_generation_pending=False),
+                                       status="scheduled" if campaign else "draft",
+                                       scheduled_at=post["scheduled_at"] if campaign else None,
+                                       allowed={"draft", "approved", "scheduled", "failed", "awaiting_image"})
     except BaseException:
         path.unlink(missing_ok=True)
         raise
@@ -273,6 +279,7 @@ async def publish_post(post_id, revision, *, scheduled=False):
 
 
 async def scheduler_tick():
+    from app.services.campaign_service import campaign_active
     await asyncio.to_thread(store.recover_stale_jobs)
     for tenant, post_id in await asyncio.to_thread(store.due_jobs):
         identity = tenant_context.set(tenant)
@@ -281,12 +288,16 @@ async def scheduler_tick():
             post = await asyncio.to_thread(store.get, "post", post_id)
             if post["status"] != "scheduled" or not post["scheduled_at"] or post["scheduled_at"] > store.now_iso():
                 continue
+            if not await asyncio.to_thread(campaign_active, post):
+                continue
             await publish_post(post_id, post["revision"], scheduled=True)
         except (ValueError, KeyError):
             # Invalid configuration must not cause repeated posting attempts every tick.
             try:
                 current = await asyncio.to_thread(store.get, "post", post_id)
             except KeyError:
+                continue
+            if not await asyncio.to_thread(campaign_active, current):
                 continue
             if post and current["status"] == "scheduled" and current["revision"] == post["revision"]:
                 await asyncio.to_thread(store.update, "post", post_id, current["revision"],
@@ -298,11 +309,28 @@ async def scheduler_tick():
 
 async def scheduler_loop():
     import logging
-    while True:
-        try:
-            await scheduler_tick()
-        except asyncio.CancelledError:
-            raise
-        except Exception:
-            logging.getLogger("planner").error("scheduler_tick_failed")
-        await asyncio.sleep(settings.SCHEDULER_INTERVAL_SECONDS)
+    from app.services.campaign_service import generate_pending_slots
+
+    async def generation_loop():
+        while True:
+            try:
+                await generate_pending_slots()
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                logging.getLogger("planner").error("campaign_generation_failed")
+            await asyncio.sleep(settings.SCHEDULER_INTERVAL_SECONDS)
+
+    generator = asyncio.create_task(generation_loop())
+    try:
+        while True:
+            try:
+                await scheduler_tick()
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                logging.getLogger("planner").error("scheduler_tick_failed")
+            await asyncio.sleep(settings.SCHEDULER_INTERVAL_SECONDS)
+    finally:
+        generator.cancel()
+        await asyncio.gather(generator, return_exceptions=True)

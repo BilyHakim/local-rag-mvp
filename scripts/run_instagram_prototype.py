@@ -17,6 +17,7 @@ async def main():
     parser.add_argument("--cloudflared", required=True, type=Path)
     parser.add_argument("--port", type=int, default=8011)
     parser.add_argument("--media-port", type=int, default=8012)
+    parser.add_argument("--enable-scheduler", action="store_true", help="Enable scheduled posts and automatic campaigns")
     args = parser.parse_args()
 
     if not 1 <= args.port <= 65535 or not 1 <= args.media_port <= 65535:
@@ -68,7 +69,7 @@ async def run(args, app_socket, media_socket):
     if not config.get("instagram_user_id") or not config.get("instagram_access_token"):
         raise SystemExit("Instagram credentials for local are not configured. No publishing attempted.")
     config["instagram_login_mode"] = "unified"
-    settings.SCHEDULER_ENABLED = False
+    settings.SCHEDULER_ENABLED = args.enable_scheduler
     settings.MEDIA_SIGNING_KEY = settings.MEDIA_SIGNING_KEY if len(settings.MEDIA_SIGNING_KEY) >= 32 else secrets.token_urlsafe(32)
     tenant_context.set("local")
     try:
