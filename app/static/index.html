@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="Workspace untuk knowledge perusahaan, audit SEO, dan produksi konten social media.">
   <title>Company AI Workspace</title>
-  <link rel="stylesheet" href="/static/styles.css?v=16">
+  <link rel="stylesheet" href="/static/styles.css?v=17">
 </head>
 <body>
   <a class="skip-link" href="#mainContent">Langsung ke area kerja</a>
@@ -210,6 +210,7 @@
                 <div class="work-heading"><span class="work-index" aria-hidden="true">01</span><h2 id="socialBriefTitle">Mulai dengan brief</h2></div>
                 <p class="panel-description">Ceritakan tema, tujuan, dan pesan yang ingin disampaikan.</p>
                 <label class="field"><span>Kanal publikasi</span><select name="channel"><option value="instagram">Instagram (gambar + caption)</option><option value="website">Website (artikel WordPress)</option></select></label>
+                <label class="field"><span>Jumlah gambar / slide</span><input name="image_count" type="number" min="1" max="10" value="1" required></label>
                 <div id="socialConversation" class="social-conversation"></div>
                 <label class="field"><span>Brief atau arahan revisi</span><textarea name="brief" rows="6" minlength="3" maxlength="8000" required placeholder="Tuliskan tema, target audiens, pesan utama, dan gaya bahasa yang Anda inginkan."></textarea></label>
                 <label class="workspace-check"><input name="use_knowledge" type="checkbox" checked> Gunakan knowledge perusahaan</label>
@@ -235,12 +236,15 @@
                 <label class="field"><span>Caption / isi artikel</span><textarea name="caption" required maxlength="12000" rows="10"></textarea></label>
                 <label class="field"><span>Hashtag (pisahkan dengan spasi)</span><input name="hashtags" placeholder="#tema #brand"></label>
                 <label class="field"><span>Brief gambar</span><textarea name="image_prompt" maxlength="4000" rows="4"></textarea></label>
+                <label class="field"><span>Brief per slide (carousel)</span><textarea name="image_prompts" maxlength="40500" rows="8" aria-describedby="slideBriefHelp"></textarea></label>
+                <p id="slideBriefHelp" class="empty-note">Pisahkan brief setiap slide dengan baris berisi --- . Tuliskan teks infografis yang harus muncul dan gaya visualnya. Jika kosong, hanya Brief gambar yang dipakai.</p>
                 <button class="workspace-button" type="submit" id="saveDraft" disabled>Simpan perubahan</button>
               </form>
               <div class="image-preview"><img id="socialImage" class="social-image" alt="Preview gambar konten" width="1024" height="1024" hidden><p id="imageEmpty">Unggah gambar sendiri atau buat gambar dari brief untuk melihat pratinjau.</p></div>
+              <div id="slideGallery" class="slide-gallery" role="group" aria-label="Urutan gambar konten"></div>
               <form id="imageUploadForm" class="workspace-form">
-                <label class="field"><span>Gambar dari komputer</span><input id="postImageFile" name="file" type="file" accept="image/png,image/jpeg,image/webp" aria-describedby="imageUploadHelp" required disabled></label>
-                <p id="imageUploadHelp" class="empty-note">PNG, JPEG, atau WebP, maksimal 10 MB. Instagram menerima rasio 4:5 sampai 1.91:1. Unggah gambar membatalkan persetujuan dan jadwal.</p>
+                <label class="field"><span>Gambar dari komputer</span><input id="postImageFile" name="file" type="file" multiple accept="image/png,image/jpeg,image/webp" aria-describedby="imageUploadHelp" required disabled></label>
+                <p id="imageUploadHelp" class="empty-note">Pilih 1 sampai 10 gambar PNG, JPEG, atau WebP, maksimal 10 MB per gambar dan total 30 MB. Upload mengganti seluruh set gambar; urutan dapat diubah setelah upload. Instagram menerima rasio 4:5 sampai 1.91:1 dan menyesuaikan carousel mengikuti gambar pertama. Perubahan gambar membatalkan persetujuan dan jadwal. Slot kampanye harus diunggah lengkap sesuai jumlah slide.</p>
                 <button type="submit" class="workspace-button" id="uploadPostImage" disabled>Unggah gambar</button>
               </form>
               <button type="button" class="workspace-button" id="generateImage" disabled>Buat gambar konten</button>
@@ -272,6 +276,7 @@
               <label class="field"><span>Interval publikasi</span><select name="interval_hours"><option value="24">Setiap hari</option><option value="48">Setiap 2 hari</option><option value="168">Setiap minggu</option><option value="1">Setiap jam</option></select></label>
               <label class="field"><span>Jumlah posting</span><input name="count" type="number" min="1" max="30" value="7" required></label>
               <label class="field"><span>Mode gambar</span><select name="image_mode" aria-describedby="campaignImageHint"><option value="manual">Manual: unggah gambar sendiri</option><option value="automatic">Otomatis: buat dengan AI</option></select></label>
+              <label class="field"><span>Jumlah gambar per posting</span><input name="image_count" type="number" min="1" max="10" value="1" required></label>
               <p id="campaignImageHint" class="empty-note campaign-wide">Manual adalah pilihan awal. Caption dibuat otomatis; tiap posting Instagram menunggu gambar Anda sebelum terbit. Mode otomatis memerlukan provider gambar AI.</p>
               <label class="workspace-check campaign-wide"><input name="use_knowledge" type="checkbox" checked> Gunakan knowledge perusahaan</label>
               <p id="campaignSchedulePreview" class="empty-note campaign-wide" role="status">Isi jadwal pertama untuk melihat rentang publikasi.</p>
@@ -289,6 +294,6 @@
   </div>
   <div class="toast" id="toast" role="status"></div>
   <script src="/static/app.js?v=10"></script>
-  <script src="/static/workspace.js?v=6"></script>
+  <script src="/static/workspace.js?v=7"></script>
 </body>
 </html>

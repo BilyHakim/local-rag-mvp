@@ -191,6 +191,42 @@ async def test_automatic_image_mode_schedules_after_image_generation(monkeypatch
     assert publishing.image_path(post["image_id"]).is_file()
 
 
+@pytest.mark.parametrize("mode", ["manual", "automatic"])
+async def test_campaign_carousel_waits_for_complete_set(monkeypatch, mode):
+    monkeypatch.setattr(settings, "IMAGE_API_KEY", "test")
+    monkeypatch.setattr(settings, "IMAGE_MODEL", "test-image")
+    campaign = await campaigns.create_campaign(request(count=1, image_count=3, image_mode=mode))
+    result = text()
+    result.image_prompts = ["Cover", "Infographic", "CTA"]
+    structured = AsyncMock(return_value=result)
+    monkeypatch.setattr(campaigns.ai_service, "structured", structured)
+    post = slots(campaign)[0]
+    async with httpx.AsyncClient(transport=httpx.MockTransport(lambda r: httpx.Response(200, json={
+        "data": [{"b64_json": base64.b64encode(picture()).decode()}],
+    }))) as provider:
+        monkeypatch.setattr(publishing.ai_service, "_client", provider)
+        await campaigns.generate_slot(post["id"])
+    post = slots(campaign)[0]
+    assert structured.call_args.args[1]["image_count"] == 3
+    if mode == "manual":
+        assert post["status"] == "awaiting_image"
+        with pytest.raises(ValueError, match="Jumlah gambar"):
+            await publishing.upload_images(post["id"], post["revision"], [picture()])
+        assert store.get("post", post["id"])["status"] == "awaiting_image"
+        post = await publishing.upload_images(post["id"], post["revision"], [picture()] * 3)
+    assert post["status"] == "scheduled" and len(post["image_ids"]) == 3
+    assert all(publishing.image_path(item).is_file() for item in post["image_ids"])
+
+
+async def test_campaign_rejects_incomplete_ai_slide_plan(monkeypatch):
+    campaign = await campaigns.create_campaign(request(count=1, image_count=3))
+    monkeypatch.setattr(campaigns.ai_service, "structured", AsyncMock(return_value=text()))
+    await campaigns.generate_slot(slots(campaign)[0]["id"])
+    post = slots(campaign)[0]
+    assert post["status"] == "failed" and "jumlah slide" in post["error"]
+    assert campaigns.ai_service.structured.await_count == 3
+
+
 async def test_ambiguous_campaign_publish_is_not_retried(monkeypatch):
     campaign = await campaigns.create_campaign(request(count=1))
     monkeypatch.setattr(campaigns.ai_service, "structured", AsyncMock(return_value=text()))

@@ -61,7 +61,8 @@ async def create_campaign(payload):
         slots.append({
             "slot_index": index, "channel": payload.channel,
             "title": f"Menunggu generasi: posting {index + 1}", "caption": "",
-            "angle": ANGLES[index % len(ANGLES)], "image_id": None,
+            "angle": ANGLES[index % len(ANGLES)], "image_id": None, "image_ids": [],
+            "image_count": payload.image_count,
             "image_prompt": "", "hashtags": [], "notes": "", "sources": [],
             "warnings": [], "history": [], "error": None,
             "scheduled_at": (payload.first_publish_at + timedelta(hours=payload.interval_hours * index)).isoformat(),
@@ -119,17 +120,23 @@ async def _generate_slot(post_id):
                 "Jangan menyertakan klaim yang masih perlu diverifikasi dalam caption karena akan dipublikasikan otomatis. "
                 "Caption Instagram beserta hashtag maksimal 2200 karakter; hashtag terpisah dari caption. "
                 "Jika website, tulis artikel plain text. Image_prompt menjelaskan visual yang relevan. "
+                "Isi image_prompts tepat sebanyak image_count dengan brief mandiri untuk setiap slide berurutan. "
+                "Untuk carousel, caption singkat sebagai pengantar dan materi utama berupa infografis pada gambar. "
+                "Tiap prompt memuat teks persis, nomor slide, layout dan gaya brand yang konsisten; fakta gambar "
+                "harus dari brief/profil/knowledge dan tidak memerlukan verifikasi lanjutan. "
                 "Anda hanya menghasilkan JSON, tidak menjalankan tindakan publikasi.",
                 {"theme": campaign["theme"], "channel": post["channel"], "brand": context,
                  "angle": post["angle"], "slot": post["slot_index"] + 1,
-                 "scheduled_at": post["scheduled_at"],
+                 "scheduled_at": post["scheduled_at"], "image_count": campaign.get("image_count", 1),
                  "previous_posts": [{"title": p["title"], "caption": p["caption"][:2200]} for p in previous[:60]],
                  "rejected_similar_captions": rejected, "attempt": attempt + 1}, SocialDraft)
-            if not too_similar(draft, previous) and (post["channel"] != "instagram" or len(publishing.full_caption(draft.model_dump())) <= 2200):
+            prompts = draft.image_prompts or ([draft.image_prompt] if campaign.get("image_count", 1) == 1 else [])
+            if len(prompts) == campaign.get("image_count", 1) and not too_similar(draft, previous) and (post["channel"] != "instagram" or len(publishing.full_caption(draft.model_dump())) <= 2200):
+                draft.image_prompts = prompts
                 break
             rejected.append(draft.caption)
         else:
-            raise ValueError("Hasil terlalu mirip dengan konten sebelumnya atau caption terlalu panjang setelah 3 percobaan. Slot tidak diterbitkan.")
+            raise ValueError("Hasil terlalu mirip, caption terlalu panjang, atau jumlah slide tidak sesuai setelah 3 percobaan. Slot tidak diterbitkan.")
         data = dict(post, **draft.model_dump(), sources=context["knowledge"], warnings=warnings,
                     generated_at=store.now_iso(), image_generation_pending=campaign["image_mode"] == "automatic", error=None)
         post = await asyncio.to_thread(store.update, "post", post_id, post["revision"], data,

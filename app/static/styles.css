@@ -221,6 +221,11 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
 .image-preview:has(img:not([hidden])) { padding: 0; border-style: solid; }
 .image-preview p { max-width: 340px; margin: 0; font-size: 13px; color: var(--muted); }
 .social-image { display: block; width: 100%; aspect-ratio: 1; height: auto; max-height: 480px; object-fit: contain; border-radius: 7px; }
+.slide-gallery { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); gap: 16px; }
+.slide-gallery:empty { display: none; }
+.slide-gallery figure { margin: 0; min-width: 0; }
+.slide-gallery figcaption { color: var(--ink); margin-top: 8px; }
+.slide-gallery .workspace-actions { flex-wrap: wrap; }
 .publication-section { border-top: 1px solid var(--line); padding-top: 8px; }
 .publication-section > summary { padding-block: 12px; }
 .publication-section > .workspace-form { margin-top: 20px; }

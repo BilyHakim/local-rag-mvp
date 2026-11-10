@@ -43,6 +43,146 @@ async def client_request(method, path, **kwargs):
         return await client.request(method, path, **kwargs)
 
 
+def slide_picture():
+    image = io.BytesIO()
+    Image.new("RGB", (64, 64), "teal").save(image, "PNG")
+    return image.getvalue()
+
+
+async def test_carousel_upload_preview_order_and_revision(monkeypatch):
+    post = draft("instagram")
+    path = f"/api/workspace/social/posts/{post['id']}"
+    response = await client_request("POST", path + "/image-upload", data={"revision": 1},
+                                    files=[("file", (f"{i}.png", slide_picture(), "image/png")) for i in range(3)])
+    assert response.status_code == 200
+    post = response.json()
+    ids = post["image_ids"]
+    assert len(set(ids)) == 3 and post["image_id"] == ids[0]
+    for i in range(3):
+        preview = await client_request("GET", path + f"/image?index={i}")
+        assert preview.status_code == 200 and preview.content.startswith(b"\xff\xd8")
+    assert (await client_request("GET", path + "/image?index=3")).status_code == 404
+    approved = store.update("post", post["id"], post["revision"], post, status="approved")
+    reordered = await client_request("PUT", path + "/images", json={"revision": approved["revision"], "image_ids": ids[::-1]})
+    assert reordered.status_code == 200
+    assert reordered.json()["image_ids"] == ids[::-1] and reordered.json()["status"] == "draft"
+    assert reordered.json()["image_id"] == ids[-1]
+    assert (await client_request("PUT", path + "/images", json={"revision": approved["revision"], "image_ids": ids})).status_code == 409
+    assert (await client_request("PUT", path + "/images", json={"revision": reordered.json()["revision"], "image_ids": [ids[0]] * 3})).status_code == 409
+
+
+@pytest.mark.parametrize("files", [[b"bad"], [slide_picture(), b"bad"], [slide_picture()] * 11])
+async def test_carousel_upload_failure_keeps_previous_images(files):
+    post = await publishing.upload_images(draft("instagram")["id"], 1, [slide_picture()])
+    with pytest.raises(ValueError):
+        await publishing.upload_images(post["id"], post["revision"], files)
+    assert store.get("post", post["id"])["image_ids"] == post["image_ids"]
+    assert len(list(publishing.image_path(post["image_id"]).parent.glob("*.jpg"))) == 1
+
+
+@pytest.mark.parametrize("fail", [False, True])
+async def test_carousel_generation_is_atomic(monkeypatch, fail):
+    post = draft("instagram")
+    post = store.update("post", post["id"], 1, dict(post, image_prompts=["Cover: Ocean", "Facts: Ocean", "CTA: Learn"]))
+    monkeypatch.setattr(settings, "IMAGE_API_KEY", "test")
+    monkeypatch.setattr(settings, "IMAGE_MODEL", "test")
+    monkeypatch.setattr(settings, "IMAGE_API_BASE_URL", "https://images.example.com/v1")
+    calls = []
+
+    def respond(request):
+        calls.append(json.loads(request.content)["prompt"])
+        if fail and len(calls) == 2:
+            return httpx.Response(503)
+        return httpx.Response(200, json={"data": [{"b64_json": base64.b64encode(slide_picture()).decode()}]})
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(respond)) as provider:
+        monkeypatch.setattr(publishing.ai_service, "_client", provider)
+        if fail:
+            with pytest.raises(httpx.HTTPStatusError):
+                await publishing.generate_image(post["id"], post["revision"])
+            assert store.get("post", post["id"])["revision"] == post["revision"]
+            assert not list(publishing.image_path("a" * 32).parent.glob("*.jpg"))
+        else:
+            result = await publishing.generate_image(post["id"], post["revision"])
+            assert calls == post["image_prompts"]
+            assert len(result["image_ids"]) == 3
+            assert all(publishing.image_path(item).is_file() for item in result["image_ids"])
+
+
+@pytest.mark.parametrize("reject_child", [False, True])
+async def test_carousel_instagram_publishes_parent_in_order(monkeypatch, reject_child):
+    from urllib.parse import parse_qs
+    post = draft("instagram")
+    post = store.update("post", post["id"], 1, dict(post, image_ids=["a" * 32, "b" * 32]), status="publishing")
+    monkeypatch.setattr(settings, "PUBLISHING_CONNECTIONS", {"local": {"instagram_user_id": "123", "instagram_access_token": "secret"}})
+    monkeypatch.setattr(publishing, "public_image_url", lambda item: f"https://example.com/{item}.jpg")
+    calls = []
+
+    def respond(request):
+        data = parse_qs(request.content.decode())
+        calls.append((request.url.path, data))
+        if request.url.path.endswith("/media"):
+            if data.get("is_carousel_item") == ["true"]:
+                assert "caption" not in data
+                return httpx.Response(200, json={"id": "child1" if "a" * 32 in data["image_url"][0] else "child2"})
+            assert data["media_type"] == ["CAROUSEL"] and data["children"] == ["child1,child2"]
+            return httpx.Response(200, json={"id": "parent"})
+        if request.url.path.endswith("/media_publish"):
+            assert data == {"creation_id": ["parent"]}
+            return httpx.Response(200, json={"id": "published"})
+        if request.url.path.endswith("/published"):
+            return httpx.Response(200, json={"permalink": "https://example.com/post"})
+        return httpx.Response(200, json={"status_code": "ERROR" if reject_child else "FINISHED"})
+
+    original = httpx.AsyncClient
+    monkeypatch.setattr(publishing.httpx, "AsyncClient", lambda **kw: original(transport=httpx.MockTransport(respond), **kw))
+    if reject_child:
+        with pytest.raises(ValueError):
+            await publishing.publish_instagram(post)
+        assert not any(path.endswith("/media_publish") for path, data in calls)
+    else:
+        result = await publishing.publish_instagram(post)
+        assert result["external_id"] == "published"
+        assert sum(path.endswith("/media_publish") for path, data in calls) == 1
+
+
+async def test_carousel_wordpress_includes_all_images_in_order(monkeypatch):
+    post = await publishing.upload_images(draft()["id"], 1, [slide_picture()] * 3)
+    post = store.update("post", post["id"], post["revision"], post, status="publishing")
+    monkeypatch.setattr(settings, "PUBLISHING_CONNECTIONS", {"local": {"wordpress_url": "https://example.com", "wordpress_username": "user", "wordpress_app_password": "secret"}})
+    uploads, posts = [], []
+
+    def respond(request):
+        if request.url.path.endswith("/media"):
+            uploads.append(request.content)
+            return httpx.Response(200, json={"id": len(uploads), "source_url": f"https://example.com/{len(uploads)}.jpg"})
+        data = json.loads(request.content)
+        posts.append(data)
+        return httpx.Response(200, json={"id": 123, "status": data["status"], "link": "https://example.com/post"})
+
+    original = httpx.AsyncClient
+    monkeypatch.setattr(publishing.httpx, "AsyncClient", lambda **kw: original(transport=httpx.MockTransport(respond), **kw))
+    await publishing.publish_wordpress(post)
+    assert len(uploads) == 3 and posts[0]["featured_media"] == 1
+    content = posts[0]["content"]
+    assert content.index("/1.jpg") < content.index("/2.jpg") < content.index("/3.jpg")
+    assert posts[1] == {"status": "publish"}
+
+
+async def test_carousel_social_draft_count_and_revision_context(monkeypatch):
+    monkeypatch.setattr(specialists, "brand_context", AsyncMock(return_value=({"knowledge": []}, [])))
+    result = SocialDraft(title="Infografis", caption="Lihat panduan ini", image_prompt="Cover", image_prompts=["Cover", "Isi", "Penutup"])
+    structured = AsyncMock(return_value=result)
+    monkeypatch.setattr(specialists.ai_service, "structured", structured)
+    post = await specialists.generate_social(GenerateRequest(brief="Panduan sensor", image_count=3))
+    assert post["image_prompts"] == result.image_prompts and post["image_count"] == 3
+    assert structured.call_args.args[1]["image_count"] == 3
+    await specialists.generate_social(GenerateRequest(brief="Revisi panduan", image_count=3, post_id=post["id"], revision=post["revision"]))
+    assert structured.call_args.args[1]["previous_draft"]["image_prompts"] == result.image_prompts
+    with pytest.raises(ValueError, match="Jumlah brief"):
+        await specialists.generate_social(GenerateRequest(brief="Panduan baru", image_count=2))
+
+
 def test_tenant_profile_and_post_boundary():
     post = draft()
     store.set_profile({"name": "Alpha"})
@@ -325,7 +465,7 @@ async def test_image_multipart_limit_does_not_expand_json_limit(monkeypatch):
     monkeypatch.setattr(settings, "MAX_UPLOAD_BYTES", 1024)
     post = draft("instagram")
     response = await client_request("POST", f"/api/workspace/social/posts/{post['id']}/image-upload",
-                                    data={"revision": 1}, files={"file": ("large.png", b"x" * (1024 * 1024 + 2048), "image/png")})
+                                    data={"revision": 1}, files={"file": ("large.png", b"x" * (1024 * 1024 + 11 * 1024), "image/png")})
     assert response.status_code == 413
     response = await client_request("POST", "/api/workspace/social/posts", content=b"x" * (256 * 1024 + 1))
     assert response.status_code == 413

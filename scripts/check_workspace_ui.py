@@ -106,7 +106,7 @@ def main():
                     post_id = f"{index + 100:032x}"
                     state["posts"][post_id] = {"id": post_id, "revision": 1, "status": "awaiting_image", "campaign_id": campaign_id,
                         "channel": data["channel"], "title": f"[Data uji] Slot {index + 1}", "caption": "Konten fixture untuk pengujian kampanye.",
-                        "image_prompt": "", "hashtags": [], "history": [], "warnings": [], "sources": [], "notes": "", "image_id": None,
+                        "image_prompt": "", "image_count": data.get("image_count", 1), "hashtags": [], "history": [], "warnings": [], "sources": [], "notes": "", "image_id": None,
                         "scheduled_at": data["first_publish_at"]}
             else:
                 response = list(state["campaigns"].values())
@@ -121,7 +121,9 @@ def main():
             previous = state["posts"].get(post_id, {})
             response = {"id": post_id, "revision": previous.get("revision", 0) + 1, "status": "draft", "channel": data["channel"],
                         "title": "[Data uji] Materi konten", "caption": "Materi untuk menguji editor. Bukan konten publikasi nyata.",
-                        "image_prompt": "Visual pengujian", "hashtags": ["uji"], "notes": "Fixture UI, tidak dikirim ke provider AI.",
+                        "image_prompt": "Visual pengujian", "image_count": data.get("image_count", 1),
+                        "image_prompts": [f"Slide uji {i + 1}" for i in range(data.get("image_count", 1))],
+                        "hashtags": ["uji"], "notes": "Fixture UI, tidak dikirim ke provider AI.",
                         "history": [], "warnings": [], "sources": [], "image_id": None}
             response["history"] = previous.get("history", []) + [{"instruction": data["brief"], "result": deepcopy(response)}]
             state["posts"][post_id] = response
@@ -148,6 +150,11 @@ def main():
                     post["status"] = "draft"
                 elif action in {"image", "image-upload"}:
                     post.update(image_id="c" * 32, status="scheduled" if post.get("campaign_id") else "draft")
+                    count = len(post.get("image_prompts") or [1]) if action == "image" else request.post_data_buffer.count(b'filename=')
+                    post["image_ids"] = [f"{i + 200:032x}" for i in range(count)]
+                    post["image_id"] = post["image_ids"][0]
+                elif action == "images":
+                    post.update(image_ids=data["image_ids"], image_id=data["image_ids"][0], status="draft", scheduled_at=None)
                 elif action == "approve":
                     post["status"] = "approved"
                 elif action == "schedule":
@@ -264,11 +271,34 @@ def main():
         check_layout("social-upload-mobile")
         page.screenshot(path=str(output / "social-upload-mobile.png"), full_page=True)
         page.set_viewport_size({"width": 1440, "height": 1000})
+        page.locator("#postImageFile").set_input_files([
+            {"name": f"slide-{i}.jpg", "mimeType": "image/jpeg", "buffer": buffer.getvalue()} for i in range(3)])
+        page.locator("#uploadPostImage").click()
+        expect(page.locator("#slideGallery img")).to_have_count(3)
+        expect(page.locator("#socialImage")).to_be_hidden()
+        original_order = list(state["posts"]["b" * 32]["image_ids"])
+        expect(page.locator('#slideGallery button[data-slide="0"][data-move="-1"]')).to_be_disabled()
+        page.locator('#slideGallery button[data-slide="1"][data-move="-1"]').focus()
+        page.keyboard.press("Enter")
+        expect(page.locator("#toast")).to_contain_text("Urutan gambar disimpan")
+        assert state["posts"]["b" * 32]["image_ids"] == [original_order[1], original_order[0], original_order[2]]
+        expect(page.locator('#slideGallery button[data-slide="0"][data-move="1"]')).to_be_focused()
+        page.keyboard.press("Enter")
+        expect(page.locator("#postStatus")).to_contain_text("v6")
+        assert state["posts"]["b" * 32]["image_ids"] == original_order
+        for width in (360, 768, 1024, 1440):
+            page.set_viewport_size({"width": width, "height": 1000})
+            for theme in ("light", "dark"):
+                page.locator("html").evaluate("(el, theme) => el.dataset.theme = theme", theme)
+                check_layout(f"carousel-{width}-{theme}")
+                page.screenshot(path=str(output / f"carousel-{width}-{theme}.png"), full_page=True)
+        log.append("Carousel manual: upload three files, numbered previews, keyboard ordering, boundary controls, four widths and both themes")
         page.locator("#newSocial").click()
         log.append("Manual draft: keyboard activation, edit/save, file upload, preview on desktop/mobile; no AI request")
         page.locator(".workspace-status summary").filter(visible=True).click()
         expect(page.locator("#socialView .connection-items")).to_contain_text("model-uji")
         page.locator('#socialForm [name="channel"]').select_option("website")
+        page.locator('#socialForm [name="image_count"]').fill("3")
         page.locator('#socialForm [name="brief"]').fill("Brief pengujian antarmuka")
         page.locator("#socialModel").focus()
         page.keyboard.press("ArrowDown")
@@ -278,14 +308,18 @@ def main():
         expect(page.locator("#postStatus")).to_contain_text("Draft")
         assert state["social_models"][-1] == "model-lain"
         page.locator('#postEditor [name="caption"]').fill("Materi yang diedit untuk pengujian.")
+        page.locator('#postEditor [name="image_prompts"]').fill("Cover uji\n---\nIsi infografis uji\n---\nPenutup uji")
         page.locator("#saveDraft").click()
+        assert state["posts"]["a" * 32]["image_prompts"] == ["Cover uji", "Isi infografis uji", "Penutup uji"]
         page.locator('#socialForm [name="brief"]').fill("Revisi materi pengujian")
         page.locator("#socialModel").select_option("model-uji")
         page.locator("#generateSocial").click()
         expect(page.locator("#postStatus")).to_contain_text("v3")
         assert state["social_models"][-1] == "model-uji"
         page.locator("#generateImage").click()
-        expect(page.locator("#socialImage")).to_be_visible()
+        expect(page.locator("#slideGallery img")).to_have_count(3)
+        assert len(state["posts"]["a" * 32]["image_prompts"]) == 3
+        log.append("AI carousel: selected three slides, generated and edited slide briefs, generated full preview set")
         page.locator("#publicationSection summary").click()
         page.locator("#approvePost").click()
         future = (datetime.now(timezone.utc) + timedelta(days=2)).strftime("%Y-%m-%dT09:00")
@@ -329,6 +363,7 @@ def main():
         page.locator('#campaignForm [name="theme"]').fill("[Data uji] Edukasi operasional kapal")
         page.locator('#campaignForm [name="first_publish_at"]').fill(future)
         page.locator('#campaignForm [name="count"]').fill("2")
+        page.locator('#campaignForm [name="image_count"]').fill("3")
         page.locator('#campaignForm [name="interval_hours"]').select_option("48")
         page.locator('#campaignForm [name="image_mode"]').select_option("automatic")
         page.locator('#campaignForm [name="image_mode"]').select_option("manual")
@@ -341,6 +376,7 @@ def main():
         page.keyboard.press("Enter")
         expect(page.locator("#campaignList")).to_contain_text("Aktif")
         assert state["campaigns"]["d" * 32]["model"] == "model-lain"
+        assert state["campaigns"]["d" * 32]["image_count"] == 3
         assert state["campaigns"]["d" * 32]["first_publish_at"].endswith("+07:00")
         page.get_by_role("button", name="Jeda kampanye", exact=True).click()
         expect(page.locator("#campaignList")).to_contain_text("Dijeda")
@@ -349,7 +385,8 @@ def main():
         page.locator('[data-post-id="' + f"{100:032x}" + '"]').click()
         expect(page.locator("#postStatus")).to_contain_text("Menunggu gambar")
         expect(page.locator("#publishPost")).to_be_disabled()
-        page.locator("#postImageFile").set_input_files({"name": "fixture.jpg", "mimeType": "image/jpeg", "buffer": buffer.getvalue()})
+        page.locator("#postImageFile").set_input_files([
+            {"name": f"campaign-slide-{i}.jpg", "mimeType": "image/jpeg", "buffer": buffer.getvalue()} for i in range(3)])
         page.locator("#uploadPostImage").click()
         expect(page.locator("#postStatus")).to_contain_text("Terjadwal")
         page.locator("#backToPlanner").click()

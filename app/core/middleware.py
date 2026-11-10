@@ -105,7 +105,7 @@ class SecurityMiddleware:
             if path == "/api/documents/upload":
                 limit = settings.MAX_UPLOAD_BYTES + 1024 * 1024
             elif re.fullmatch(r"/api/workspace/social/posts/[a-f0-9]{32}/image-upload", path):
-                limit = min(settings.MAX_UPLOAD_BYTES, 10 * 1024 * 1024) + 1024 * 1024
+                limit = min(10 * settings.MAX_UPLOAD_BYTES, 30 * 1024 * 1024) + 1024 * 1024
             else:
                 limit = 256 * 1024
             chunks, length = [], 0

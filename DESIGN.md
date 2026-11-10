@@ -1,5 +1,12 @@
 # Workspace design direction
 
+Carousel extension: retain ENERGY 2 / RHYTHM 2 / MOTION 1 and the current
+editorial studio direction. Numbered previews follow reading order in a wrapping
+grid, so infographics remain inspectable on phones. Native earlier/later buttons
+support keyboard ordering without dragging. Existing secondary buttons, type,
+theme colors and focus states keep the editor consistent. Count fields distinguish
+slides per post from campaign post count; no new visual assets or animation.
+
 Login: retain ENERGY 2 / RHYTHM 2 / MOTION 1, the teal wordmark, system type and
 cream submit action. A single narrow form on the existing canvas asks only for
 username and password. Visible labels, autocomplete, password visibility, inline

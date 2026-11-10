@@ -7,7 +7,7 @@ from fastapi.routing import APIRoute
 
 from app.core.config import settings
 from app.schemas.workspace import (BrandProfile, AuditRequest, GenerateRequest, PostEdit,
-                                   RevisionRequest, ScheduleRequest, ResolveRequest, ManualPostRequest)
+                                   RevisionRequest, ScheduleRequest, ResolveRequest, ManualPostRequest, ImageOrderRequest)
 from app.services import workspace_store as store
 from app.services.specialist_service import audit_url, generate_social
 from app.api.chat import select_model
@@ -15,7 +15,7 @@ from app.services.model_service import chat_model_context
 from app.schemas.workspace import CampaignRequest
 from app.services import campaign_service as campaigns
 from app.services.publishing_service import (connections, generate_image, image_path, publish_post,
-                                   validate_publishable, validate_signature, upload_image, instagram_connection)
+                                   validate_publishable, validate_signature, upload_images, post_images, instagram_connection)
 
 
 class WorkspaceRoute(APIRoute):
@@ -146,29 +146,52 @@ async def create_image(record_id: str, payload: RevisionRequest):
     return await generate_image(record_id, payload.revision)
 
 
-@router.get("/social/posts/{record_id}/image")
-async def preview_image(record_id: str):
+@router.put("/social/posts/{record_id}/images")
+async def order_images(record_id: str, payload: ImageOrderRequest):
     current = await asyncio.to_thread(store.get, "post", record_id)
-    path = image_path(current.get("image_id"))
+    if sorted(payload.image_ids) != sorted(post_images(current)):
+        raise ValueError("Urutan harus memuat seluruh gambar posting ini tepat sekali")
+    return await asyncio.to_thread(store.update, "post", record_id, payload.revision,
+                                   dict(current, image_ids=payload.image_ids, image_id=payload.image_ids[0]),
+                                   allowed={"draft", "approved", "scheduled", "failed"})
+
+
+@router.get("/social/posts/{record_id}/image")
+async def preview_image(record_id: str, index: int = 0):
+    current = await asyncio.to_thread(store.get, "post", record_id)
+    images = post_images(current)
+    if index < 0 or index >= len(images):
+        raise HTTPException(404, "Gambar belum tersedia")
+    path = image_path(images[index])
     if not path.is_file():
         raise HTTPException(404, "Gambar belum tersedia")
     return FileResponse(path, media_type="image/jpeg")
 
 
 @router.post("/social/posts/{record_id}/image-upload")
-async def upload_post_image(record_id: str, revision: int = Form(..., ge=1), file: UploadFile = File(...)):
+async def upload_post_image(record_id: str, revision: int = Form(..., ge=1), file: list[UploadFile] = File(...)):
     try:
-        raw = await file.read(min(settings.MAX_UPLOAD_BYTES, 10 * 1024 * 1024) + 1)
-        return await upload_image(record_id, revision, raw)
+        if not 1 <= len(file) <= 10:
+            raise ValueError("Pilih 1 sampai 10 gambar")
+        files = []
+        total = 0
+        for item in file:
+            raw = await item.read(min(settings.MAX_UPLOAD_BYTES, 10 * 1024 * 1024) + 1)
+            total += len(raw)
+            if total > 30 * 1024 * 1024:
+                raise ValueError("Total gambar maksimal 30 MB")
+            files.append(raw)
+        return await upload_images(record_id, revision, files)
     finally:
-        await file.close()
+        for item in file:
+            await item.close()
 
 
 @router.post("/social/posts/{record_id}/approve")
 async def approve_post(record_id: str, payload: RevisionRequest):
     current = await asyncio.to_thread(store.get, "post", record_id)
     # Approval can be given before credentials are configured, but requires final material.
-    if current["channel"] == "instagram" and not current.get("image_id"):
+    if current["channel"] == "instagram" and not post_images(current):
         raise ValueError("Buat gambar sebelum menyetujui posting Instagram")
     return await asyncio.to_thread(store.update, "post", record_id, payload.revision, dict(current, error=None),
                                    status="approved", allowed={"draft", "failed"})

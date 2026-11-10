@@ -3,6 +3,8 @@
   let identityEpoch = 0;
   let schedulerEnabled = false;
   let plannerOrigin = null;
+  let slideUrls = [];
+  const imagesOf = post => post.image_ids?.length ? post.image_ids : post.image_id ? [post.image_id] : [];
   const base = '/api/workspace';
   const labels = { draft: 'Draft', approved: 'Disetujui', scheduled: 'Terjadwal', publishing: 'Menerbitkan', published: 'Terbit', failed: 'Gagal', uncertain: 'Perlu diperiksa', queued: 'Antrean generasi', generating: 'Membuat konten', awaiting_image: 'Menunggu gambar' };
   const json = (body, method = 'POST') => ({ method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
@@ -104,9 +106,12 @@
   });
 
   function clearImage() {
+    slideUrls.forEach(url => URL.revokeObjectURL(url)); slideUrls = [];
+    qs('#slideGallery').replaceChildren();
     if (previewUrl) URL.revokeObjectURL(previewUrl);
     previewUrl = null;
     qs('#socialImage').hidden = true; qs('#socialImage').removeAttribute('src');
+    qs('#socialImage').parentElement.hidden = false;
     qs('#imageEmpty').hidden = false;
   }
 
@@ -114,6 +119,8 @@
     selected = post; dirty = false;
     const editor = qs('#postEditor').elements;
     ['title', 'caption', 'image_prompt'].forEach(k => { editor[k].value = post[k] || ''; });
+    editor.image_prompts.value = post.image_prompts?.length > 1 ? post.image_prompts.join('\n\n---\n\n') : '';
+    qs('#socialForm').elements.image_count.value = post.image_count || post.image_prompts?.length || imagesOf(post).length || 1;
     editor.hashtags.value = (post.hashtags || []).join(' ');
     qs('#socialForm').elements.channel.value = post.channel;
     qs('#socialBriefTitle').textContent = 'Revisi melalui chat';
@@ -124,15 +131,28 @@
     qs('#resolveForm').reset();
     clearImage(); refreshActions();
     const epoch = identityEpoch;
-    if (post.image_id) {
+    const images = imagesOf(post);
+    qs('#socialImage').parentElement.hidden = images.length > 1;
+    if (images.length) {
       try {
-        const response = await fetch(`${base}/social/posts/${post.id}/image`, { credentials: 'same-origin' });
-        if (response.status === 401) { location.replace('/login' + location.hash); return; }
-        if (!response.ok) throw new Error('Preview gambar belum dapat dimuat.');
-        const blob = await response.blob();
-        if (epoch !== identityEpoch || selected?.id !== post.id || selected?.revision !== post.revision) return;
-        previewUrl = URL.createObjectURL(blob); qs('#socialImage').src = previewUrl; qs('#socialImage').hidden = false;
-        qs('#imageEmpty').hidden = true;
+        for (let index = 0; index < images.length; index++) {
+          const response = await fetch(`${base}/social/posts/${post.id}/image?index=${index}`, { credentials: 'same-origin' });
+          if (response.status === 401) { location.replace('/login' + location.hash); return; }
+          if (!response.ok) throw new Error('Preview gambar belum dapat dimuat.');
+          const blob = await response.blob();
+          if (epoch !== identityEpoch || selected?.id !== post.id || selected?.revision !== post.revision) return;
+          const url = URL.createObjectURL(blob);
+          if (images.length === 1) {
+            previewUrl = url; qs('#socialImage').src = url; qs('#socialImage').hidden = false;
+          } else {
+            slideUrls.push(url);
+            const figure = document.createElement('figure');
+            figure.innerHTML = `<img class="social-image" src="${url}" width="1024" height="1024" alt="Preview slide ${index + 1}"><figcaption>Slide ${index + 1} dari ${images.length}</figcaption><div class="workspace-actions"><button type="button" class="workspace-button" data-slide="${index}" data-move="-1" aria-label="Majukan slide ${index + 1}">Majukan</button><button type="button" class="workspace-button" data-slide="${index}" data-move="1" aria-label="Mundurkan slide ${index + 1}">Mundurkan</button></div>`;
+            qs('#slideGallery').append(figure);
+          }
+          qs('#imageEmpty').hidden = true;
+          refreshActions();
+        }
       } catch (error) { if (epoch === identityEpoch) showToast(error.message); }
     }
   }
@@ -142,6 +162,10 @@
     qs('#plannerReturnHint').textContent = dirty ? 'Perubahan belum disimpan. Buka kembali posting ini untuk melanjutkan penyuntingan.' : '';
     const editable = !!selected && ['draft', 'approved', 'scheduled', 'failed', 'awaiting_image'].includes(selected.status);
     const uploadable = editable || selected?.status === 'queued';
+    qsa('#slideGallery button').forEach(button => {
+      const target = Number(button.dataset.slide) + Number(button.dataset.move);
+      button.disabled = busy || dirty || !editable || selected?.status === 'awaiting_image' || target < 0 || target >= imagesOf(selected || {}).length;
+    });
     qs('#saveDraft').disabled = busy || !editable || !dirty;
     qs('#generateImage').disabled = busy || !editable || dirty;
     qs('#postImageFile').disabled = busy || !uploadable || dirty;
@@ -215,12 +239,14 @@
   qs('#imageUploadForm').addEventListener('submit', event => {
     event.preventDefault();
     if (!selected || dirty) return;
-    const file = qs('#postImageFile').files[0];
-    if (!file) return;
-    if (file.size > 10 * 1024 * 1024) { showToast('Gambar maksimal 10 MB.'); return; }
+    const files = Array.from(qs('#postImageFile').files);
+    if (!files.length) return;
+    if (files.length > 10) { showToast('Pilih maksimal 10 gambar.'); return; }
+    if (files.some(file => file.size > 10 * 1024 * 1024)) { showToast('Setiap gambar maksimal 10 MB.'); return; }
+    if (files.reduce((sum, file) => sum + file.size, 0) > 30 * 1024 * 1024) { showToast('Total gambar maksimal 30 MB.'); return; }
     run(event.submitter, async epoch => {
       const body = new FormData();
-      body.append('file', file); body.append('revision', String(selected.revision));
+      files.forEach(file => body.append('file', file)); body.append('revision', String(selected.revision));
       const post = await api(`${base}/social/posts/${selected.id}/image-upload`, { method: 'POST', body });
       if (epoch !== identityEpoch) return;
       event.target.reset(); await renderPost(post); await loadPosts();
@@ -228,6 +254,20 @@
     });
   });
   qs('#postEditor').addEventListener('input', () => { dirty = true; refreshActions(); });
+  qs('#slideGallery').addEventListener('click', async event => {
+    const button = event.target.closest('button[data-slide]');
+    if (!button || button.disabled || !selected) return;
+    const images = [...imagesOf(selected)], from = Number(button.dataset.slide), to = from + Number(button.dataset.move);
+    [images[from], images[to]] = [images[to], images[from]];
+    const postId = selected.id, epoch = identityEpoch;
+    await run(button, async epoch => {
+      const post = await api(`${base}/social/posts/${selected.id}/images`, json({ revision: selected.revision, image_ids: images }, 'PUT'));
+      if (epoch !== identityEpoch) return;
+      await renderPost(post); await loadPosts();
+      showToast('Urutan gambar disimpan. Tinjau dan setujui kembali sebelum terbit.');
+    });
+    if (epoch === identityEpoch && selected?.id === postId) qs(`#slideGallery button[data-slide="${to}"]:not(:disabled)`)?.focus();
+  });
 
   qs('#socialForm').addEventListener('submit', event => {
     event.preventDefault();
@@ -235,6 +275,7 @@
     run(event.submitter, async epoch => {
       const f = event.target.elements;
       const post = await api(base + '/social/generate', json({ brief: f.brief.value, channel: f.channel.value,
+        image_count: Number(f.image_count.value),
         model: f.model.value || null,
         use_knowledge: f.use_knowledge.checked, post_id: selected?.id || null, revision: selected?.revision || null }));
       if (epoch !== identityEpoch) return;
@@ -247,7 +288,9 @@
     run(event.submitter, async epoch => {
       const f = event.target.elements;
       const post = await api(`${base}/social/posts/${selected.id}`, json({ revision: selected.revision, title: f.title.value,
-        caption: f.caption.value, image_prompt: f.image_prompt.value, hashtags: f.hashtags.value.split(/\s+/).filter(Boolean) }, 'PUT'));
+        caption: f.caption.value, image_prompt: f.image_prompt.value,
+        image_prompts: f.image_prompts.value.trim() ? f.image_prompts.value.split(/^\s*---\s*$/m).map(value => value.trim()) : [],
+        hashtags: f.hashtags.value.split(/\s+/).filter(Boolean) }, 'PUT'));
       if (epoch !== identityEpoch) return;
       await renderPost(post); await loadPosts(); showToast('Perubahan tersimpan sebagai draft.');
     });
@@ -320,7 +363,7 @@
     run(event.submitter, async epoch => {
       const f = campaignForm.elements;
       await api(base + '/social/campaigns', json({ theme: f.theme.value, channel: f.channel.value,
-        model: f.model.value || null, image_mode: f.image_mode.value, use_knowledge: f.use_knowledge.checked,
+        model: f.model.value || null, image_mode: f.image_mode.value, image_count: Number(f.image_count.value), use_knowledge: f.use_knowledge.checked,
         first_publish_at: f.first_publish_at.value + ':00+07:00', interval_hours: Number(f.interval_hours.value), count: Number(f.count.value) }));
       if (epoch !== identityEpoch) return;
       await loadPosts(); showToast('Kampanye aktif. Agent akan menyiapkan konten melalui scheduler.');

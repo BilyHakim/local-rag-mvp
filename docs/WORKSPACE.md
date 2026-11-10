@@ -125,19 +125,19 @@ URL private, loopback, link-local, kredensial di URL, dan port selain 80/443 dit
 
 ## Social Media: manual dan otomatis
 
-1. Pada Chat / Manual, pilih Instagram atau Website dan tulis brief.
+1. Pada Buat konten, pilih Instagram atau Website, jumlah 1 sampai 10 slide, dan tulis brief.
 2. Specialist membuat judul, caption/artikel, hashtag, brief gambar, dan catatan.
 3. Tulis instruksi berikutnya untuk merevisi draft yang sama. Riwayat sepuluh
    instruksi/hasil terbaru disimpan dan dipakai sebagai konteks revisi.
 4. Edit materi secara langsung jika perlu, lalu simpan perubahan.
-5. Generate gambar jika dibutuhkan. Instagram memerlukan gambar sebelum persetujuan.
+5. Buat gambar dari brief per slide atau unggah beberapa gambar sekaligus. Instagram memerlukan gambar sebelum persetujuan.
 6. Tinjau materi, lalu pilih **Setujui versi ini**.
 7. Pilih **Terbitkan sekarang** atau setel jadwal WIB pada versi yang disetujui.
 
 Posting satuan tetap memerlukan persetujuan. Content planner juga mendukung
 **kampanye otomatis dari tema**: pilih model teks, kanal, jadwal pertama dalam WIB,
 interval (per jam, harian, dua harian, mingguan), jumlah 1 sampai 30 posting, mode
-gambar dan penggunaan knowledge. Klik **Aktifkan kampanye otomatis** untuk
+gambar, jumlah 1 sampai 10 gambar per posting, dan penggunaan knowledge. Klik **Aktifkan kampanye otomatis** untuk
 mengizinkan generasi serta publikasi tanpa persetujuan per posting.
 
 Agent membuat caption segera setelah kampanye aktif, maksimal dua slot per putaran
@@ -154,7 +154,10 @@ Model memakai adapter AI yang sama, termasuk konfigurasi Command Code yang ada.
 mengunggah gambar sendiri, sebelum atau sesudah caption dibuat. Slot tanpa gambar
 berstatus **Menunggu gambar** dan tidak dipublikasikan. Setelah caption dan gambar
 tersedia, slot otomatis masuk antrean jadwal. Mode **Otomatis** memerlukan
-`IMAGE_API_KEY` dan `IMAGE_MODEL`, lalu membuat gambar untuk setiap slot.
+`IMAGE_API_KEY` dan `IMAGE_MODEL`, lalu membuat seluruh gambar untuk setiap slot.
+Pada kampanye carousel, upload manual harus memuat seluruh gambar sesuai jumlah
+slide. Slot baru dijadwalkan setelah set gambar lengkap. Kegagalan salah satu
+gambar AI membuat slot gagal dan tidak menerbitkan sebagian carousel.
 Instagram tetap memerlukan URL media HTTPS publik serta signing key dan token.
 
 Kampanye dapat dijeda/dilanjutkan. Jeda mencegah generasi berikutnya dan pengambilan
@@ -187,11 +190,22 @@ IMAGE_API_KEY=<key-gambar>
 IMAGE_MODEL=<model-gambar>
 ```
 
-Adapter meminta `/images/generations`, ukuran 1024×1024, satu gambar, dan membutuhkan
+Adapter meminta `/images/generations`, ukuran 1024×1024, satu gambar per slide, dan membutuhkan
 respons `data[0].b64_json`. Contohnya model GPT Image yang mengembalikan base64 secara
 default. Provider yang hanya mengembalikan URL belum didukung. Gambar dikonversi ke
-JPEG lokal untuk preview dan posting satu gambar Instagram. Penggunaan API gambar
+JPEG lokal untuk preview dan posting satu gambar atau carousel Instagram. Penggunaan API gambar
 dapat menimbulkan biaya provider. Model gambar independen dari model teks/Ollama.
+
+Pilih **Jumlah gambar / slide** sebelum membuat atau merevisi draft AI. Untuk
+carousel, AI menulis caption singkat dan brief infografis terpisah untuk setiap
+slide, termasuk teks pada gambar. Brief dapat diedit pada **Brief per slide**,
+dipisahkan baris `---`; jika kosong, **Brief gambar** menghasilkan satu gambar.
+Gambar dibuat berurutan dengan gaya yang diminta pada prompt. Kesamaan visual
+antar-slide dan ketepatan tulisan tetap bergantung pada provider; tinjau hasilnya.
+Tombol **Majukan / Mundurkan** mengatur urutan gambar tersimpan dan membatalkan
+persetujuan/jadwal. WordPress memakai gambar pertama sebagai featured image dan
+menyertakan seluruh gambar berurutan dalam artikel untuk posting multi-gambar.
+Posting lama dengan satu `image_id` tetap didukung tanpa migrasi database.
 
 Preview memerlukan autentikasi workspace. Meta mengambil media melalui URL HTTPS
 bertanda tangan dengan masa berlaku 24 jam; siapa pun yang memiliki URL tersebut
@@ -202,9 +216,13 @@ dapat mengambil gambar sampai kedaluwarsa. Jangan membagikan URL tersebut di log
 ### Prototype lokal dengan gambar sendiri dan Unified Login
 
 Di Social Media, pilih **Tulis tanpa AI**, isi caption, simpan perubahan, lalu
-unggah PNG/JPEG/WebP melalui **Gambar dari komputer**. Maksimal 10 MB dan 20 MP;
+unggah 1 sampai 10 PNG/JPEG/WebP melalui **Gambar dari komputer**. Maksimal 10 MB dan 20 MP per gambar, total 30 MB;
 rasio Instagram 4:5 sampai 1.91:1. Gambar dikonversi menjadi JPEG. Unggah baru
 membatalkan persetujuan dan jadwal, sama seperti pembuatan gambar AI.
+Upload mengganti seluruh set gambar, bukan menambah ke set sebelumnya. Preview
+menampilkan nomor slide; Instagram menyesuaikan rasio carousel mengikuti gambar
+pertama. Carousel dibuat lewat container per gambar, lalu satu container induk
+yang diterbitkan sekali setelah seluruh media siap.
 
 Token Unified Login/System User memakai `graph.facebook.com`. Tambahkan
 `"instagram_login_mode":"unified"` pada objek koneksi tenant yang sama dalam
@@ -321,10 +339,13 @@ lama otomatis, multi-replica, queue terdistribusi, atau OAuth management UI.
 ## API dan verifikasi
 
 Endpoint `/api/workspace` mencakup `/status`, `/profile`, `/seo/audits`,
-`/social/generate`, `/social/posts`, dan aksi per-post `/image`, `/approve`,
+`/social/generate`, `/social/posts`, dan aksi per-post `/image`, `/image-upload`,
+`/images` (PUT urutan seluruh gambar), `/approve`,
 `/schedule`, `/cancel`, `/publish`, `/resolve`. Perubahan post memerlukan `revision`
 terbaru. Konflik versi/status mengembalikan 409, ID tenant lain mengembalikan 404,
 dan reader mengembalikan 403. Schema lengkap ada pada `/docs` dalam mode lokal.
+Upload memakai field multipart `file` berulang. Preview `/image?index=0`
+mengambil slide pertama; indeks berikutnya mengikuti urutan `image_ids`.
 
 ```powershell
 .\.venv\Scripts\python.exe -m pytest -q

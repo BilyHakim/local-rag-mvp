@@ -50,17 +50,30 @@ async def instagram_connection():
     return {"id": data["id"], "username": data["username"], "connected": True}
 
 
+def post_images(post):
+    return post.get("image_ids") or ([post["image_id"]] if post.get("image_id") else [])
+
+
 async def upload_image(post_id, revision, raw):
+    return await upload_images(post_id, revision, [raw])
+
+
+async def upload_images(post_id, revision, files):
     post = await asyncio.to_thread(store.get, "post", post_id)
     allowed = {"draft", "approved", "scheduled", "failed", "awaiting_image", "queued"}
     if post["revision"] != revision or post["status"] not in allowed:
         raise ValueError("Muat ulang draft sebelum mengunggah gambar")
-    if not raw or len(raw) > min(settings.MAX_UPLOAD_BYTES, 10 * 1024 * 1024):
+    if not 1 <= len(files) <= 10:
+        raise ValueError("Pilih 1 sampai 10 gambar")
+    if post.get("campaign_id") and len(files) != post.get("image_count", 1):
+        raise ValueError("Jumlah gambar harus sesuai jumlah slide kampanye")
+    if any(not raw or len(raw) > min(settings.MAX_UPLOAD_BYTES, 10 * 1024 * 1024) for raw in files):
         raise ValueError("Gambar maksimal 10 MB dan tidak boleh kosong")
-    image_id = uuid4().hex
-    path = image_path(image_id)
+    if sum(len(raw) for raw in files) > 30 * 1024 * 1024:
+        raise ValueError("Total gambar maksimal 30 MB")
+    image_ids = [uuid4().hex for _ in files]
 
-    def save():
+    def save(raw, path):
         try:
             with Image.open(io.BytesIO(raw)) as image:
                 if image.format not in {"PNG", "JPEG", "WEBP"}:
@@ -77,14 +90,16 @@ async def upload_image(post_id, revision, raw):
             raise ValueError("File gambar tidak valid atau rusak") from exc
 
     try:
-        await asyncio.to_thread(save)
+        for raw, image_id in zip(files, image_ids):
+            await asyncio.to_thread(save, raw, image_path(image_id))
         campaign = bool(post.get("campaign_id")) and post["status"] in {"queued", "awaiting_image"}
         status = ("queued" if post["status"] == "queued" else "scheduled") if campaign else "draft"
         return await asyncio.to_thread(store.update, "post", post_id, revision,
-                                       dict(post, image_id=image_id, error=None), allowed=allowed,
+                                       dict(post, image_id=image_ids[0], image_ids=image_ids, error=None), allowed=allowed,
                                        status=status, scheduled_at=post["scheduled_at"] if campaign else None)
     except BaseException:
-        path.unlink(missing_ok=True)
+        for image_id in image_ids:
+            image_path(image_id).unlink(missing_ok=True)
         raise
 
 
@@ -120,20 +135,40 @@ async def generate_image(post_id, revision):
         raise ValueError("Muat ulang draft sebelum membuat gambar")
     if not settings.IMAGE_API_KEY or not settings.IMAGE_MODEL:
         raise ValueError("Konfigurasikan IMAGE_API_KEY dan IMAGE_MODEL pada server")
-    if not post.get("image_prompt"):
+    prompts = post.get("image_prompts") or [post.get("image_prompt", "")]
+    if not 1 <= len(prompts) <= 10 or any(not p.strip() or len(p) > 4000 for p in prompts):
         raise ValueError("Brief gambar belum tersedia")
+    if post.get("campaign_id") and len(prompts) != post.get("image_count", 1):
+        raise ValueError("Jumlah brief gambar harus sesuai jumlah slide kampanye")
+    image_ids = []
+    try:
+        for prompt in prompts:
+            image_id = uuid4().hex
+            image_ids.append(image_id)
+            await generate_slide(prompt, image_path(image_id))
+        campaign = bool(post.get("campaign_id")) and post["status"] == "awaiting_image"
+        return await asyncio.to_thread(store.update, "post", post_id, revision,
+                                       dict(post, image_id=image_ids[0], image_ids=image_ids, error=None, image_generation_pending=False),
+                                       status="scheduled" if campaign else "draft",
+                                       scheduled_at=post["scheduled_at"] if campaign else None,
+                                       allowed={"draft", "approved", "scheduled", "failed", "awaiting_image"})
+    except BaseException:
+        for image_id in image_ids:
+            image_path(image_id).unlink(missing_ok=True)
+        raise
+
+
+async def generate_slide(prompt, path):
     response = await ai_service.client.post(
         settings.IMAGE_API_BASE_URL.rstrip("/") + "/images/generations",
         headers={"Authorization": f"Bearer {settings.IMAGE_API_KEY}"},
-        json={"model": settings.IMAGE_MODEL, "prompt": post["image_prompt"], "n": 1, "size": "1024x1024"},
+        json={"model": settings.IMAGE_MODEL, "prompt": prompt, "n": 1, "size": "1024x1024"},
     )
     response.raise_for_status()
     encoded = response.json()["data"][0].get("b64_json")
     if not encoded or len(encoded) > 30_000_000:
         raise ValueError("Provider gambar harus mengembalikan b64_json (maksimal 22 MB)")
     raw = base64.b64decode(encoded, validate=True)
-    image_id = uuid4().hex
-    path = image_path(image_id)
 
     def save():
         with Image.open(io.BytesIO(raw)) as image:
@@ -143,15 +178,6 @@ async def generate_image(post_id, revision):
             path.parent.mkdir(parents=True, exist_ok=True)
             image.convert("RGB").save(path, "JPEG", quality=90)
     await asyncio.to_thread(save)
-    try:
-        campaign = bool(post.get("campaign_id")) and post["status"] == "awaiting_image"
-        return await asyncio.to_thread(store.update, "post", post_id, revision, dict(post, image_id=image_id, error=None, image_generation_pending=False),
-                                       status="scheduled" if campaign else "draft",
-                                       scheduled_at=post["scheduled_at"] if campaign else None,
-                                       allowed={"draft", "approved", "scheduled", "failed", "awaiting_image"})
-    except BaseException:
-        path.unlink(missing_ok=True)
-        raise
 
 
 def full_caption(post):
@@ -169,9 +195,11 @@ def validate_publishable(post):
             raise ValueError("Koneksi Instagram tenant ini belum dikonfigurasi")
         if len(full_caption(post)) > 2200:
             raise ValueError("Caption beserta hashtag Instagram maksimal 2200 karakter")
-        if not post.get("image_id") or not image_path(post["image_id"]).is_file():
+        images = post_images(post)
+        if not 1 <= len(images) <= 10 or any(not image_path(item).is_file() for item in images):
             raise ValueError("Instagram memerlukan gambar yang sudah dibuat")
-        public_image_url(post["image_id"])
+        for item in images:
+            public_image_url(item)
         if not re.fullmatch(r"v\d+\.\d+", settings.INSTAGRAM_API_VERSION):
             raise ValueError("Versi API Instagram tidak valid")
     else:
@@ -188,23 +216,26 @@ async def publish_instagram(post):
     account = config["instagram_user_id"]
     headers = {"Authorization": f"Bearer {config['instagram_access_token']}"}
     async with httpx.AsyncClient(timeout=30, trust_env=False) as client:
+        images = post_images(post)
+        if len(images) > 1:
+            children = []
+            for item in images:
+                child = await client.post(f"{base}/{account}/media", headers=headers,
+                                          data={"image_url": public_image_url(item), "is_carousel_item": "true"})
+                child.raise_for_status()
+                child_id = child.json()["id"]
+                await wait_instagram_media(client, base, headers, child_id)
+                children.append(child_id)
+            media = {"media_type": "CAROUSEL", "children": ",".join(children), "caption": full_caption(post)}
+        else:
+            media = {"image_url": public_image_url(images[0]), "caption": full_caption(post)}
         response = await client.post(f"{base}/{account}/media", headers=headers,
-                                     data={"image_url": public_image_url(post["image_id"]), "caption": full_caption(post)})
+                                     data=media)
         response.raise_for_status()
         container = response.json()["id"]
         post = await asyncio.to_thread(store.update, "post", post["id"], post["revision"],
                                        dict(post, instagram_container_id=container), status="publishing", allowed={"publishing"})
-        for attempt in range(12):
-            status = await client.get(f"{base}/{container}", headers=headers, params={"fields": "status_code"})
-            status.raise_for_status()
-            code = status.json().get("status_code")
-            if code == "FINISHED":
-                break
-            if code in {"ERROR", "EXPIRED"}:
-                raise ValueError("Media ditolak Instagram; periksa format atau akses gambar")
-            if attempt == 11:
-                raise ValueError("Media belum siap. Belum ada posting yang diterbitkan.")
-            await asyncio.sleep(2)
+        await wait_instagram_media(client, base, headers, container)
         # Any failure after this boundary may still have created a public post.
         try:
             response = await client.post(f"{base}/{account}/media_publish", headers=headers, data={"creation_id": container})
@@ -222,6 +253,20 @@ async def publish_instagram(post):
         return {"external_id": external_id, "external_url": link}
 
 
+async def wait_instagram_media(client, base, headers, container):
+    for attempt in range(12):
+        status = await client.get(f"{base}/{container}", headers=headers, params={"fields": "status_code"})
+        status.raise_for_status()
+        code = status.json().get("status_code")
+        if code == "FINISHED":
+            return
+        if code in {"ERROR", "EXPIRED"}:
+            raise ValueError("Media ditolak Instagram; periksa format atau akses gambar")
+        if attempt == 11:
+            raise ValueError("Media belum siap. Belum ada posting yang diterbitkan.")
+        await asyncio.sleep(2)
+
+
 async def publish_wordpress(post):
     config = connections()
     base = config["wordpress_url"].rstrip("/") + "/wp-json/wp/v2"
@@ -229,11 +274,15 @@ async def publish_wordpress(post):
     content = "\n".join(f"<p>{html.escape(part).replace(chr(10), '<br>')}</p>" for part in post["caption"].split("\n\n") if part.strip())
     async with httpx.AsyncClient(timeout=30, trust_env=False, auth=auth) as client:
         media_id = None
-        if post.get("image_id"):
-            response = await client.post(base + "/media", content=await asyncio.to_thread(image_path(post["image_id"]).read_bytes),
-                                         headers={"Content-Type": "image/jpeg", "Content-Disposition": f'attachment; filename="{post["id"]}.jpg"'})
+        for index, image_id in enumerate(post_images(post)):
+            response = await client.post(base + "/media", content=await asyncio.to_thread(image_path(image_id).read_bytes),
+                                         headers={"Content-Type": "image/jpeg", "Content-Disposition": f'attachment; filename="{post["id"]}-{index + 1}.jpg"'})
             response.raise_for_status()
-            media_id = response.json()["id"]
+            uploaded = response.json()
+            if index == 0:
+                media_id = uploaded["id"]
+            if len(post_images(post)) > 1:
+                content += f'<figure><img src="{html.escape(uploaded["source_url"], quote=True)}" alt="Slide {index + 1}"></figure>'
         # First create a private draft. Ambiguous draft creation cannot create a public duplicate.
         response = await client.post(base + "/posts", json={"title": post["title"], "content": content,
                                                            "status": "draft", **({"featured_media": media_id} if media_id else {})})

@@ -174,14 +174,21 @@ async def generate_social(payload):
         "atau statistik. Cantumkan kebutuhan verifikasi di notes. Ide kreatif diperbolehkan. "
         "Untuk Instagram, caption beserta hashtag maksimal 2200 karakter. Hashtags hanya daftar tanpa duplikasi "
         "di caption. Untuk website, caption berupa isi artikel plain text. Image_prompt harus menjelaskan visual "
-        "sesuai tema dan visual_style brand. Anda tidak boleh mengeksekusi publish.",
+        "sesuai tema dan visual_style brand. Isi image_prompts tepat sebanyak image_count, berurutan. "
+        "Untuk carousel, buat caption singkat sebagai pengantar; materi utama berupa infografis pada slide. "
+        "Setiap prompt harus mandiri: cantumkan teks persis yang harus tampil, urutan slide, layout dan gaya brand "
+        "yang konsisten. Jangan mengarang fakta pada gambar. Anda tidak boleh mengeksekusi publish.",
         {"channel": payload.channel, "brief": payload.brief, "brand": context,
-         "previous_draft": {k: previous[k] for k in ("title", "caption", "image_prompt", "hashtags")} if previous else None,
-         "history": history}, SocialDraft)
+         "previous_draft": {k: previous.get(k) for k in ("title", "caption", "image_prompt", "image_prompts", "hashtags")} if previous else None,
+         "history": history, "image_count": payload.image_count}, SocialDraft)
+    prompts = draft.image_prompts or ([draft.image_prompt] if payload.image_count == 1 else [])
+    if len(prompts) != payload.image_count:
+        raise ValueError("Jumlah brief slide dari AI tidak sesuai. Coba buat ulang draft.")
+    draft.image_prompts = prompts
     data = dict(previous or {}, **draft.model_dump(), channel=payload.channel,
                 brief=payload.brief, sources=context["knowledge"], warnings=warnings,
                 history=(history + [{"instruction": payload.brief, "result": draft.model_dump()}])[-10:],
-                image_id=None, external_id=None, external_url=None, error=None,
+                image_id=None, image_ids=[], image_count=payload.image_count, external_id=None, external_url=None, error=None,
                 instagram_container_id=None, wordpress_post_id=None)
     if previous:
         return await asyncio.to_thread(store.update, "post", previous["id"], payload.revision, data,

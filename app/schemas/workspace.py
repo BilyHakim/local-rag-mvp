@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from typing import Literal
+from typing import Annotated, Literal
 from pydantic import BaseModel, Field, field_validator
 
 
@@ -38,12 +38,14 @@ class SocialDraft(BaseModel):
     title: str = Field(min_length=1, max_length=200)
     caption: str = Field(min_length=1, max_length=12000)
     image_prompt: str = Field(min_length=1, max_length=4000)
+    image_prompts: list[Annotated[str, Field(min_length=1, max_length=4000)]] = Field(default_factory=list, max_length=10)
     hashtags: list[str] = Field(default_factory=list, max_length=20)
     notes: str = Field(default="", max_length=3000)
 
 
 class GenerateRequest(BaseModel):
     brief: str = Field(min_length=3, max_length=8000)
+    image_count: int = Field(default=1, ge=1, le=10)
     model: str | None = Field(default=None, min_length=1, max_length=200)
     channel: Literal["instagram", "website"] = "instagram"
     use_knowledge: bool = True
@@ -56,6 +58,7 @@ class PostEdit(BaseModel):
     title: str = Field(min_length=1, max_length=200)
     caption: str = Field(min_length=1, max_length=12000)
     image_prompt: str = Field(default="", max_length=4000)
+    image_prompts: list[Annotated[str, Field(min_length=1, max_length=4000)]] = Field(default_factory=list, max_length=10)
     hashtags: list[str] = Field(default_factory=list, max_length=20)
 
 
@@ -69,11 +72,16 @@ class RevisionRequest(BaseModel):
     revision: int = Field(ge=1)
 
 
+class ImageOrderRequest(RevisionRequest):
+    image_ids: list[Annotated[str, Field(pattern=r"^[a-f0-9]{32}$")]] = Field(min_length=1, max_length=10)
+
+
 class CampaignRequest(BaseModel):
     theme: str = Field(min_length=3, max_length=8000)
     model: str | None = Field(default=None, min_length=1, max_length=200)
     channel: Literal["instagram", "website"] = "instagram"
     image_mode: Literal["manual", "automatic"] = "manual"
+    image_count: int = Field(default=1, ge=1, le=10)
     use_knowledge: bool = True
     first_publish_at: datetime
     interval_hours: int = Field(default=24, ge=1, le=720)
