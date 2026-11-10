@@ -42,6 +42,8 @@ def main():
     output.mkdir(parents=True, exist_ok=True)
     log, errors, contrast_results = [], [], []
     state = {"profile": {}, "posts": {}, "campaigns": {}, "audits": [], "publishes": 0, "conversations": {}}
+    state['account'] = {'username':'admin','tenant':'local','role':'admin','display_name':'admin','email':'','bio':'',
+                        'enabled_features':['assistant','chat','seo','social'], 'available_features':['assistant','chat','seo','social'], 'editable':True,'revision':0}
     buffer = io.BytesIO()
     Image.new("RGB", (1024, 1024), "#0F42C0").save(buffer, "JPEG")
     markdown_answer = """# Jawaban uji
@@ -94,7 +96,17 @@ Penjelasan dari fixture.
         except Exception:
             data = {}
         response = {}
-        if path == "/api/auth/me":
+        if path == '/api/account/profile':
+            if request.method == 'PUT':
+                state['account'].update({key:value for key,value in data.items() if key != 'revision'})
+                state['account']['revision'] += 1
+            response = state['account']
+        elif path == '/api/account/password':
+            if data.get('current_password') != 'fixture-current-password':
+                route.fulfill(status=409, json={'detail':'Password saat ini tidak sesuai.'})
+                return
+            response = {'message':'Password diperbarui. Sesi login lainnya sudah dikeluarkan.'}
+        elif path == "/api/auth/me":
             response = {"username": "admin", "tenant": "local", "role": "admin"}
         elif path == "/api/health":
             response = {"status": "ok", "env": "local"}
@@ -255,7 +267,7 @@ Penjelasan dari fixture.
                     page.locator("#themeToggle").click()
                     if width <= 760:
                         page.keyboard.press("Escape")
-                for view in ("chat", "assistant", "seo", "social", "brand", "knowledge"):
+                for view in ("chat", "assistant", "seo", "social", "brand", "knowledge", "account"):
                     nav(view)
                     check_layout(f"{view}-{width}-{theme}")
                     if view == "chat":
@@ -268,6 +280,10 @@ Penjelasan dari fixture.
                         page.locator("#resizeComposer").click()
                         expect(page.locator("#resizeComposer")).to_have_attribute("aria-expanded", "false")
                         page.screenshot(path=str(output / f"chat-{width}-{theme}.png"), full_page=True)
+                    if view == 'account':
+                        expect(page.locator('#accountForm [name="username"]')).to_have_value('admin')
+                        expect(page.locator('#accountSave')).to_be_enabled()
+                        page.screenshot(path=str(output / f"account-{width}-{theme}.png"), full_page=True)
                 nav("social")
                 page.locator('[data-social-tab="planner"]').click()
                 expect(page.locator('#campaignForm [name="image_mode"]')).to_have_value("manual")
@@ -288,7 +304,7 @@ Penjelasan dari fixture.
                     assert page.evaluate("document.querySelector('.sidebar').contains(document.activeElement)")
                     page.locator("#sidebarBackdrop").click(position={"x": 340, "y": 200}, force=True)
                     assert not page.locator("#mainContent").evaluate("el => el.inert")
-            log.append(f"All six views: {width}px, light/dark, no horizontal overflow, text contrast checked")
+            log.append(f"All seven views: {width}px, light/dark, no horizontal overflow, text contrast checked")
 
         page.set_viewport_size({"width": 1440, "height": 1000})
         page.locator("#sidebarCollapse").click()
@@ -298,6 +314,50 @@ Penjelasan dari fixture.
         expect(page.locator("#accessStatus")).to_have_text("admin")
         expect(page.locator("#logoutButton")).to_be_enabled()
         log.append("Workspace identity: username visible and logout control enabled; live authentication verified separately")
+
+        nav('account')
+        page.locator('#accountForm [name="display_name"]').fill('[Data uji] Bily')
+        page.locator('#accountForm [name="email"]').fill('bily@example.com')
+        page.locator('#accountForm [name="bio"]').fill('Profil fixture untuk pemeriksaan antarmuka.')
+        for feature in ('assistant','chat','seo','social'):
+            page.locator(f'#accountForm [value="{feature}"]').uncheck()
+        page.locator('#accountSave').focus()
+        page.keyboard.press('Enter')
+        expect(page.locator('#toast')).to_contain_text('pilihan fitur disimpan')
+        for feature in ('assistant','chat','seo','social'):
+            expect(page.locator(f'.nav-item[data-view="{feature}"]')).to_be_hidden()
+        expect(page.locator('.nav-item[data-view="account"]')).to_be_visible()
+        page.reload()
+        expect(page.locator('#accountForm [name="display_name"]')).to_have_value('[Data uji] Bily')
+        expect(page.locator('#accountForm [name="email"]')).to_have_value('bily@example.com')
+        page.evaluate("location.hash = 'assistant'")
+        expect(page.locator('#accountView')).to_be_visible()
+        page.reload()
+        expect(page.locator('#accountView')).to_be_visible()
+        for feature in ('assistant','chat','seo','social'):
+            page.locator(f'#accountForm [value="{feature}"]').check()
+        page.locator('#accountForm [name="display_name"]').fill('admin')
+        page.locator('#accountSave').click()
+        expect(page.locator('.nav-item[data-view="assistant"]')).to_be_visible()
+        fields = page.locator('#accountPasswordForm')
+        fields.locator('[name="current_password"]').fill('fixture-current-password')
+        fields.locator('[name="new_password"]').fill('new-fixture-password')
+        fields.locator('[name="confirm_password"]').fill('different-password')
+        page.locator('#accountPasswordSave').click()
+        expect(page.locator('#accountError')).to_contain_text('nilai yang sama')
+        fields.locator('[name="current_password"]').fill('wrong-password')
+        fields.locator('[name="confirm_password"]').fill('new-fixture-password')
+        page.locator('#accountPasswordSave').click()
+        expect(page.locator('#accountError')).to_contain_text('Password saat ini tidak sesuai')
+        expect(fields.locator('[name="current_password"]')).to_have_value('')
+        fields.locator('[name="current_password"]').fill('fixture-current-password')
+        fields.locator('[name="new_password"]').fill('new-fixture-password')
+        fields.locator('[name="confirm_password"]').fill('new-fixture-password')
+        page.locator('#accountPasswordSave').click()
+        expect(page.locator('#accountStatus')).to_contain_text('Password diperbarui')
+        page.locator('#accountReload').click()
+        expect(page.locator('#toast')).to_contain_text('Profil dimuat ulang')
+        log.append('Personal profile: edit/save, persisted reload, disable all four tabs, direct-hash guard, profile recovery, re-enable, keyboard save, password mismatch/error/success and reload')
 
         nav("assistant")
         expect(page.locator("#assistantWelcome")).to_be_visible()
@@ -639,8 +699,8 @@ Penjelasan dari fixture.
         page.locator("#generateSocial").click()
         expect(page.locator("#workspaceFeedback")).to_contain_text("Provider uji tidak tersedia")
         log.append("Error state: provider failure is visible; disabled editor prevents publishing empty drafts")
-        # The intentional fixture 503 is an expected browser network error.
-        unexpected = [error for error in errors if "503" not in error]
+        # Fixture provider 503 and password 409 responses are expected network errors.
+        unexpected = [error for error in errors if "503" not in error and "409" not in error]
         assert not unexpected, unexpected
         report = {"result": "PASS", "fixture_apis": True, "external_requests_blocked": True,
                   "click_through": log, "contrast": contrast_results, "unexpected_console_errors": unexpected}

@@ -71,16 +71,23 @@ class SecurityMiddleware:
         reader_paths = {"/api/chat-rag", "/api/knowledge/search", "/api/ready", "/api/llm/models",
                         "/api/assistant/messages", "/api/assistant/conversations"}
         own_conversation = re.fullmatch(r"/api/assistant/conversations/[a-f0-9]{32}", path)
-        if principal["role"] != "admin" and not own_conversation and path not in reader_paths | {"/api/auth/me", "/api/auth/login", "/api/auth/logout"}:
+        if principal["role"] != "admin" and not own_conversation and path not in reader_paths | {"/api/auth/me", "/api/auth/login", "/api/auth/logout", "/api/account/profile", "/api/account/password"}:
             return await reject(403, "Akses admin diperlukan")
+        feature = auth.feature_for_path(path)
+        if session_auth and feature:
+            profile = await asyncio.to_thread(auth.account_profile, principal)
+            if feature not in profile["enabled_features"]:
+                return await reject(403, "Fitur ini dinonaktifkan pada Profil Saya. Aktifkan kembali untuk menggunakannya.")
         now = time.monotonic()
         rate_key = token or (principal["tenant"] + ":" + principal.get("username", "session"))
         if path == "/api/auth/login":
             rate_key = "login:" + (scope.get("client") or ("unknown", 0))[0]
+        elif path == "/api/account/password":
+            rate_key = "password:" + principal["tenant"] + ":" + principal.get("username", "session")
         window = self.windows[rate_key]
         while window and window[0] <= now - 60:
             window.popleft()
-        if len(window) >= (10 if path == "/api/auth/login" else settings.RATE_LIMIT_PER_MINUTE):
+        if len(window) >= (10 if path in {"/api/auth/login", "/api/account/password"} else settings.RATE_LIMIT_PER_MINUTE):
             return await reject(429, "Batas request tercapai; coba lagi nanti", retry_after=max(1, int(60 - (now - window[0]))))
         window.append(now)
         if self.inflight >= 4:

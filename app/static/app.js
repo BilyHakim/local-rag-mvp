@@ -1,7 +1,20 @@
 const qs = (selector, root = document) => root.querySelector(selector);
 const qsa = (selector, root = document) => [...root.querySelectorAll(selector)];
 
-const state = { busy: false };
+const state = { busy: false, account: null, accountError: '' };
+const accountFeatures = ['assistant', 'chat', 'seo', 'social'];
+const featureEnabled = view => !accountFeatures.includes(view) || !state.account || state.account.enabled_features.includes(view);
+
+function applyAccountProfile(profile) {
+  const previous = state.account;
+  state.account = profile; state.accountError = '';
+  qs('#accessStatus').textContent = profile.display_name || profile.username || 'API key';
+  qsa('.nav-item').forEach(item => { item.hidden = !featureEnabled(item.dataset.view); });
+  const current = qs('.view.active')?.id.replace(/View$/, '');
+  if (current && !featureEnabled(current)) switchView('account');
+  if (previous && profile.enabled_features.includes('chat') && !previous.enabled_features.includes('chat')) loadModels();
+  if (previous && profile.enabled_features.includes('social') && !previous.enabled_features.includes('social')) { loadSocialModels(); loadCampaignModels(); }
+}
 const appShell = qs('.app-shell');
 const sidebar = qs('.sidebar');
 const messages = qs('#messages');
@@ -47,7 +60,8 @@ function showResult(element, message, isError = false) {
   element.classList.toggle('error', isError);
 }
 
-function switchView(name, focus = true) {
+function switchView(name, focus = true, notify = true) {
+  if (!featureEnabled(name)) name = accountFeatures.find(featureEnabled) || 'account';
   if (!qs(`#${name}View`)) return;
   qsa('.nav-item').forEach(item => {
     const active = item.dataset.view === name;
@@ -65,7 +79,7 @@ function switchView(name, focus = true) {
     heading.focus({ preventScroll: true });
     window.scrollTo(0, 0);
   }
-  document.dispatchEvent(new CustomEvent('workspace-view-changed', { detail: { view: name } }));
+  if (notify) document.dispatchEvent(new CustomEvent('workspace-view-changed', { detail: { view: name } }));
 }
 
 qsa('.nav-item').forEach(item => item.addEventListener('click', () => switchView(item.dataset.view)));
@@ -331,7 +345,7 @@ document.addEventListener('workspace-identity-changed', () => {
 qsa('.nav-item').forEach(item => { item.setAttribute('aria-label', item.textContent.trim()); });
 qsa('svg').forEach(icon => icon.setAttribute('aria-hidden', 'true'));
 const initialView = location.hash.slice(1);
-if (['chat', 'assistant', 'knowledge', 'seo', 'social', 'brand'].includes(initialView)) switchView(initialView, false);
+window.addEventListener('hashchange', () => switchView(location.hash.slice(1)));
 const modelLoadVersions = new Map();
 async function loadModels(selectId = 'llmModel', refreshId = 'refreshModels', statusId = 'modelStatus') {
   const version = (modelLoadVersions.get(selectId) || 0) + 1;
@@ -378,8 +392,17 @@ document.addEventListener('workspace-identity-changed', () => {
   loadSocialModels();
   loadCampaignModels();
 });
-loadModels();
-loadSocialModels();
-loadCampaignModels();
 checkHealth();
-api('/api/auth/me').then(user => { qs('#accessStatus').textContent = user.username || 'API key'; }).catch(() => {});
+const workspaceReady = api('/api/account/profile').then(profile => {
+  applyAccountProfile(profile);
+  return profile;
+}).catch(error => {
+  state.accountError = error.message;
+  return api('/api/auth/me').then(user => { qs('#accessStatus').textContent = user.username || 'API key'; return null; }).catch(() => null);
+}).then(profile => {
+  const target = ['chat', 'assistant', 'knowledge', 'seo', 'social', 'brand', 'account'].includes(initialView) ? initialView : 'chat';
+  switchView(target, false, false);
+  if (featureEnabled('chat')) loadModels();
+  if (featureEnabled('social')) { loadSocialModels(); loadCampaignModels(); }
+  return profile;
+});

@@ -111,5 +111,5 @@
     qs('#assistantModel').replaceChildren(new Option('Default server', ''));
     if (qs('#assistantView').classList.contains('active')) open();
   });
-  if (qs('#assistantView').classList.contains('active')) open();
+  workspaceReady.then(() => { if (qs('#assistantView').classList.contains('active')) open(); });
 })();

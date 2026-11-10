@@ -431,5 +431,5 @@
     loadView(qs('.nav-item.active').dataset.view);
   });
   refreshActions();
-  loadView(qs('.nav-item.active').dataset.view);
+  workspaceReady.then(() => loadView(qs('.nav-item.active').dataset.view));
 })();

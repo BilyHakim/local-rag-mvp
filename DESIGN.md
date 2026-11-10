@@ -1,5 +1,14 @@
 # Workspace design direction
 
+Personal profile retains the studio direction, ENERGY 2 / RHYTHM 2 / MOTION 1.
+Place Profil Saya beside account utilities at the sidebar bottom so it remains
+reachable when all four main features are hidden. A single reading-width column
+groups personal data and native feature checkboxes; password changes use a separate
+form to avoid accidental credential changes while saving layout preferences.
+Username/role are read-only; existing type, theme, focus and button styles apply.
+Feature labels state their purpose and role requirements, while a visible note
+explains that account preferences do not stop shared scheduled campaigns. No assets.
+
 Markdown answers retain ENERGY 2 / RHYTHM 2 / MOTION 1 and the studio theme.
 Use real headings and lists for reading hierarchy, theme-token table headers for
 comparison, and monospace only for code. Tight paragraph spacing removes the

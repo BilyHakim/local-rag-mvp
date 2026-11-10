@@ -32,6 +32,110 @@ async def login(client, password="admin123", **kwargs):
     return await client.post("/api/auth/login", headers=HEADERS, json={"username": "admin", "password": password}, **kwargs)
 
 
+def edited_profile(profile, **changes):
+    return {**{key: profile[key] for key in ("revision", "display_name", "email", "bio", "enabled_features")}, **changes}
+
+
+async def test_account_profile_persists_with_revision_and_keeps_login_identity(client):
+    await login(client)
+    profile = (await client.get('/api/account/profile')).json()
+    assert profile['editable'] and profile['revision'] == 0
+    assert profile['enabled_features'] == list(auth.FEATURES)
+    changed = await client.put('/api/account/profile', headers=HEADERS,
+                               json=edited_profile(profile, display_name='Bily', email='bily@example.com', bio='Catatan pribadi', enabled_features=['assistant']))
+    assert changed.status_code == 200 and changed.json()['revision'] == 1
+    assert changed.json()['username'] == 'admin' and changed.json()['display_name'] == 'Bily'
+    conflict = await client.put('/api/account/profile', headers=HEADERS, json=edited_profile(profile, display_name='Overwrite'))
+    assert conflict.status_code == 409
+    await client.post('/api/auth/logout', headers=HEADERS)
+    await login(client)
+    saved = (await client.get('/api/account/profile')).json()
+    assert saved['display_name'] == 'Bily' and saved['enabled_features'] == ['assistant']
+    assert (await client.get('/api/auth/me')).json()['username'] == 'admin'
+
+
+@pytest.mark.parametrize('feature,path', [('assistant','/api/assistant/conversations'), ('chat','/api/chat-rag'), ('seo','/api/workspace/seo/audits'), ('social','/api/workspace/social/posts')])
+async def test_disabled_features_are_blocked_but_profile_stays_accessible(client, feature, path):
+    await login(client)
+    profile = (await client.get('/api/account/profile')).json()
+    result = await client.put('/api/account/profile', headers=HEADERS, json=edited_profile(profile, enabled_features=[]))
+    assert result.status_code == 200
+    assert (await client.get(path)).status_code == 403
+    assert (await client.post(path, headers=HEADERS, json={})).status_code == 403
+    profile = (await client.get('/api/account/profile')).json()
+    assert profile['enabled_features'] == []
+    restored = await client.put('/api/account/profile', headers=HEADERS, json=edited_profile(profile, enabled_features=list(auth.FEATURES)))
+    assert restored.status_code == 200
+    if feature != 'chat':
+        assert (await client.get(path)).status_code == 200
+
+
+async def test_profiles_are_per_account_and_reader_cannot_enable_admin_features(client):
+    await login(client)
+    admin = (await client.get('/api/account/profile')).json()
+    await client.put('/api/account/profile', headers=HEADERS, json=edited_profile(admin, display_name='Private admin', enabled_features=[]))
+    with auth.connection() as db:
+        db.execute('INSERT INTO users VALUES (?,?,?,?)', ('reader', auth.password_hash('reader-password'), 'local', 'reader'))
+    await client.post('/api/auth/login', headers=HEADERS, json={'username':'reader','password':'reader-password'})
+    reader = (await client.get('/api/account/profile')).json()
+    assert reader['display_name'] == 'reader' and reader['enabled_features'] == ['assistant','chat']
+    response = await client.put('/api/account/profile', headers=HEADERS, json=edited_profile(reader, enabled_features=['seo']))
+    assert response.status_code == 409
+    assert (await client.get('/api/workspace/seo/audits')).status_code == 403
+    assert (await client.put('/api/account/profile', headers=HEADERS, json=edited_profile(reader, display_name='Reader Name'))).status_code == 200
+
+
+async def test_profile_validation_and_csrf_preserve_account(client):
+    await login(client)
+    profile = (await client.get('/api/account/profile')).json()
+    assert (await client.put('/api/account/profile', json=edited_profile(profile))).status_code == 403
+    for change in ({'role':'admin'}, {'username':'other'}, {'email':'not email'}, {'display_name':' '}, {'enabled_features':['assistant','assistant']}):
+        result = await client.put('/api/account/profile', headers=HEADERS, json=edited_profile(profile, **change))
+        assert result.status_code == 422
+    assert (await client.get('/api/account/profile')).json()['revision'] == 0
+
+
+async def test_password_update_checks_current_hashes_new_and_revokes_other_sessions(client):
+    await login(client)
+    current = client.cookies.get(auth.COOKIE_NAME)
+    other = auth.authenticate('admin','admin123')
+    assert auth.resolve_session(other)
+    path = '/api/account/password'
+    assert (await client.post(path, json={'current_password':'admin123','new_password':'new-password-123'})).status_code == 403
+    wrong = await client.post(path, headers=HEADERS, json={'current_password':'wrong','new_password':'new-password-123'})
+    assert wrong.status_code == 409
+    assert auth.resolve_session(other)
+    assert (await client.post(path, headers=HEADERS, json={'current_password':'admin123','new_password':'short'})).status_code == 422
+    result = await client.post(path, headers=HEADERS, json={'current_password':'admin123','new_password':'new-password-123'})
+    assert result.status_code == 200
+    assert auth.resolve_session(current) and auth.resolve_session(other) is None
+    with auth.connection() as db:
+        stored = db.execute("SELECT password_hash FROM users WHERE username='admin'").fetchone()[0]
+    assert stored.startswith('scrypt$') and 'new-password-123' not in stored
+    assert auth.authenticate('admin','admin123') is None
+    assert auth.authenticate('admin','new-password-123')
+
+
+async def test_api_key_cannot_edit_account_or_password(client, monkeypatch):
+    await login(client)
+    monkeypatch.setattr(settings, 'API_KEYS', {'k'*32:{'username':'admin','tenant':'local','role':'admin'}})
+    headers = {'Authorization':'Bearer '+'k'*32}
+    profile = (await client.get('/api/account/profile',headers=headers)).json()
+    assert not profile['editable']
+    assert (await client.put('/api/account/profile',headers=headers,json=edited_profile(profile))).status_code == 403
+    assert (await client.post('/api/account/password',headers=headers,json={'current_password':'admin123','new_password':'new-password-123'})).status_code == 403
+
+
+async def test_password_attempts_have_separate_rate_limit(client):
+    await login(client)
+    for _ in range(10):
+        response = await client.post('/api/account/password', headers=HEADERS, json={'current_password':'wrong','new_password':'new-password-123'})
+        assert response.status_code == 409
+    response = await client.post('/api/account/password', headers=HEADERS, json={'current_password':'admin123','new_password':'new-password-123'})
+    assert response.status_code == 429
+    assert (await client.get('/api/account/profile')).status_code == 200
+
+
 async def test_login_guards_shell_and_api_persists_session_and_revokes_logout(client):
     assert (await client.get("/")).headers["location"] == "/login"
     assert (await client.get("/api/workspace/profile")).status_code == 401

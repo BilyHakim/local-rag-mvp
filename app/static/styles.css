@@ -185,6 +185,18 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
 .result-item p { margin: 0; color: var(--muted); overflow-wrap: anywhere; }
 .score { color: var(--muted); font-size: 12px; }
 .empty-note { color: var(--muted); font-size: 13px; line-height: 1.7; margin: 0; }
+.account-wrap { max-width: 1000px; }
+.account-wrap > #accountStatus, .account-wrap > #accountError { margin-bottom: 20px; }
+.account-wrap h2 { margin-bottom: 0; }
+.account-features { min-width: 0; margin: 0; padding: 16px; border: 1px solid var(--control-line); border-radius: 8px; }
+.account-features legend { padding-inline: 8px; font-weight: 700; }
+.account-features > p { margin-bottom: 12px; }
+.account-feature { display: flex; align-items: flex-start; gap: 12px; min-height: 64px; padding: 12px 0; cursor: pointer; }
+.account-feature + .account-feature { border-top: 1px solid var(--line); }
+.account-feature input { width: 20px; height: 20px; flex: 0 0 auto; margin: 3px 0 0; accent-color: var(--brand); }
+.account-feature strong, .account-feature small { display: block; }
+.account-feature small { color: var(--muted); font-size: 13px; }
+.account-feature:has(input:disabled) { cursor: not-allowed; }
 .assistant-history { border-bottom: 1px solid var(--line); margin-bottom: 24px; }
 .assistant-wrap > .assistant-history, .assistant-wrap > .workspace-error, .assistant-wrap > #assistantContext { width: min(100%, 960px); }
 .assistant-history-controls { display: flex; align-items: end; flex-wrap: wrap; gap: 12px; margin-bottom: 16px; }

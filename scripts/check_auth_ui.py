@@ -77,11 +77,50 @@ def main():
         assert context.request.get(args.url + "/api/workspace/profile").status == 200
         page.reload()
         expect(page.locator("#accessStatus")).to_have_text("admin")
+        if page.viewport_size['width'] <= 760:
+            page.locator('.view.active .mobile-menu').click()
+        page.locator('.nav-item[data-view="account"]').click()
+        page.locator('#accountForm [name="display_name"]').fill('[Data uji] Profil')
+        for feature in ('assistant','chat','seo','social'):
+            page.locator(f'#accountForm [value="{feature}"]').uncheck()
+        page.locator('#accountSave').click()
+        expect(page.locator('#toast')).to_contain_text('pilihan fitur disimpan')
+        assert context.request.get(args.url + '/api/assistant/conversations').status == 403
+        page.reload()
+        expect(page.locator('#accessStatus')).to_have_text('[Data uji] Profil')
+        expect(page.locator('#accountView')).to_be_visible()
+        for feature in ('assistant','chat','seo','social'):
+            expect(page.locator(f'.nav-item[data-view="{feature}"]')).to_be_hidden()
+            page.locator(f'#accountForm [value="{feature}"]').check()
+        page.locator('#accountForm [name="display_name"]').fill('admin')
+        page.locator('#accountSave').click()
+        expect(page.locator('.nav-item[data-view="assistant"]')).to_be_visible()
+        password = page.locator('#accountPasswordForm')
+        password.locator('[name="current_password"]').fill('admin123')
+        password.locator('[name="new_password"]').fill('profile-test-password')
+        password.locator('[name="confirm_password"]').fill('profile-test-password')
+        page.locator('#accountPasswordSave').click()
+        expect(page.locator('#accountStatus')).to_contain_text('Password diperbarui')
         page.locator("#logoutButton").click()
         expect(page).to_have_url(args.url + "/login")
         assert context.request.get(args.url + "/api/auth/me").status == 401
         page.goto(args.url + "/")
         expect(page).to_have_url(args.url + "/login")
+        page.locator('[name="username"]').fill('admin')
+        page.locator('[name="password"]').fill('profile-test-password')
+        page.locator('#loginSubmit').click()
+        expect(page.locator('#accessStatus')).to_have_text('admin')
+        if page.viewport_size['width'] <= 760:
+            page.locator('.view.active .mobile-menu').click()
+        page.locator('.nav-item[data-view="account"]').click()
+        password = page.locator('#accountPasswordForm')
+        password.locator('[name="current_password"]').fill('profile-test-password')
+        password.locator('[name="new_password"]').fill('admin123')
+        password.locator('[name="confirm_password"]').fill('admin123')
+        page.locator('#accountPasswordSave').click()
+        expect(page.locator('#accountStatus')).to_contain_text('Password diperbarui')
+        page.locator('#logoutButton').click()
+        expect(page).to_have_url(args.url + '/login')
         unexpected = [e for e in errors if "401" not in e]
         assert not unexpected, unexpected
         report = {"result": "PASS", "screens": checks, "unexpected_console_errors": unexpected,
@@ -89,9 +128,11 @@ def main():
                                     "Theme toggle works across four widths with checked contrast and no overflow",
                                     "Password visibility toggles; wrong password displays error and clears field",
                                     "Keyboard login sets HttpOnly cookie; profile API accepts session",
-                                    "Reload preserves session; logout revokes session and redirects to login"]}
+                                    "Reload preserves session; logout revokes session and redirects to login",
+                                    "Real account profile save persists, all four features hide and API is denied, reload/re-enable restores navigation",
+                                    "Real password update allows subsequent login; test password restored and final session logged out"]}
         (output / "report.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
-        print(json.dumps({"result": "PASS", "screens": len(checks), "click_groups": 5}))
+        print(json.dumps({"result": "PASS", "screens": len(checks), "click_groups": 7}))
         browser.close()
 
 
