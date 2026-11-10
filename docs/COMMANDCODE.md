@@ -1,5 +1,25 @@
 # Command Code untuk chat RAG
 
+## Markdown di Ruang Chat
+
+Jawaban Ruang Chat ditampilkan sebagai Markdown: judul, paragraf, daftar
+bertingkat/bernomor, tabel, kutipan, tautan, penebalan, teks miring, serta kode.
+Setiap blok kode memiliki label bahasa dan tombol **Salin kode**. **Salin jawaban**
+tetap menyalin teks Markdown asli. Tabel dan kode lebar dapat digeser secara
+horizontal, termasuk dengan keyboard setelah mendapat fokus.
+
+Riwayat lama ikut memakai renderer baru saat dibuka; isi tersimpan tidak diubah.
+Setelah pembaruan, tekan **Ctrl+F5** untuk memuat ulang aset tampilan. Perubahan
+renderer tidak memerlukan restart backend atau request baru ke CommandCode.
+
+Parser markdown-it 15.0.3 disimpan lokal di `app/static/vendor`; lisensi MIT
+disertakan. HTML mentah tidak dijalankan, tautan dibatasi ke HTTP/HTTPS/mailto,
+dan gambar Markdown ditampilkan sebagai teks alternatif tanpa diunduh. Tidak
+ada CDN yang dipanggil saat membuka chat. Rumus matematika, diagram Mermaid dan
+syntax highlighting belum dirender khusus; blok tersebut tetap tampil sebagai kode.
+
+## Konfigurasi
+
 Atur `.env` pada backend, lalu restart aplikasi:
 
 ```dotenv

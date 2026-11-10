@@ -44,6 +44,37 @@ def main():
     state = {"profile": {}, "posts": {}, "campaigns": {}, "audits": [], "publishes": 0, "conversations": {}}
     buffer = io.BytesIO()
     Image.new("RGB", (1024, 1024), "#0F42C0").save(buffer, "JPEG")
+    markdown_answer = """# Jawaban uji
+
+**Teks tebal**, *teks miring*, dan `kode_inline`.
+
+## Paket hash
+
+| Paket | Kegunaan |
+| --- | --- |
+| `hash/fnv` | Hash non-kriptografi |
+| `crypto/sha256` | Hash kriptografi |
+
+- Baca data
+- Hitung hash
+  - Bandingkan hasil
+
+1. Langkah pertama
+2. Langkah kedua
+
+> Periksa kembali hasilnya sebelum digunakan.
+
+```python
+print('<script>uji</script>')
+# Baris panjang: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+```
+
+[Dokumentasi](https://example.com/docs)
+
+---
+
+Penjelasan dari fixture.
+"""
 
     def fixture(route):
         request = route.request
@@ -85,7 +116,7 @@ def main():
             response = {"id": chat_id, "revision": previous.get("revision", 0) + 1, "title": previous.get("title", data["message"]),
                         "model": data.get("model") or "model-uji", "updated_at": "2026-11-10T10:00:00Z", "context_limited": False,
                         "messages": previous.get("messages", []) + [{"role": "user", "content": data["message"]},
-                        {"role": "assistant", "content": "**Jawaban uji**\nBerikut kode:\n```python\nprint('<script>uji</script>')\n```\nPenjelasan dari fixture."}]}
+                        {"role": "assistant", "content": markdown_answer}]}
             state["conversations"][chat_id] = response
         elif path.startswith("/api/assistant/conversations/"):
             chat_id = path.rsplit("/", 1)[-1]
@@ -280,11 +311,44 @@ def main():
         expect(page.locator("#assistantMessages .message")).to_have_count(2)
         expect(page.locator("#assistantMessages pre code")).to_contain_text("<script>uji</script>")
         assert page.locator("#assistantMessages script").count() == 0
+        expect(page.locator("#assistantMessages .markdown-body h2")).to_have_text("Jawaban uji")
+        expect(page.locator("#assistantMessages .markdown-body h3")).to_have_text("Paket hash")
+        expect(page.locator("#assistantMessages table tbody tr")).to_have_count(2)
+        expect(page.locator("#assistantMessages ul ul li")).to_have_text("Bandingkan hasil")
+        expect(page.locator("#assistantMessages ol li")).to_have_count(2)
+        expect(page.locator("#assistantMessages blockquote")).to_contain_text("Periksa kembali")
+        expect(page.locator("#assistantMessages em")).to_have_text("teks miring")
+        expect(page.locator("#assistantMessages a")).to_have_attribute("href", "https://example.com/docs")
+        expect(page.locator("#assistantMessages a")).to_have_attribute("rel", "noopener noreferrer")
+        unsafe = page.evaluate(r"""() => {
+          const samples = [
+            '<script>alert(1)</script><img src=x onerror=alert(1)>',
+            '<svg onload=alert(1)><a href="javascript:alert(1)">x</a></svg>',
+            '[click](javascript:alert%281%29) [data](data:text/html,test)',
+            '[encoded](jav&#x61;script:alert%281%29)',
+            '![tracking](https://example.invalid/tracking.png)',
+            '```html\n<img src=x onerror=alert(1)>\n```',
+            '<iframe srcdoc="<script>alert(1)</script>"></iframe>',
+            '[vb](vbscript:msgbox%281%29) [file](file:///secret)',
+            '[safe](https://example.com)',
+          ];
+          return samples.map(text => {
+            const result = renderChatMarkdown(text, () => {});
+            return {elements:result.querySelectorAll('script,img,svg,iframe,object,embed').length,
+              events:[...result.querySelectorAll('*')].some(el => [...el.attributes].some(a => a.name.startsWith('on'))),
+              unsafeLinks:[...result.querySelectorAll('a')].some(a => !['http:','https:','mailto:'].includes(new URL(a.href).protocol))};
+          });
+        }""")
+        assert all(item == {"elements": 0, "events": False, "unsafeLinks": False} for item in unsafe), unsafe
         assert state["conversations"]["e" * 32]["model"] == "model-lain"
         context.grant_permissions(["clipboard-read", "clipboard-write"])
         page.get_by_role("button", name="Salin jawaban", exact=True).click()
         expect(page.locator("#toast")).to_contain_text("Teks disalin")
         assert "print(" in page.evaluate("navigator.clipboard.readText()")
+        page.get_by_role("button", name="Salin kode", exact=True).click()
+        expect(page.locator("#toast")).to_contain_text("Teks disalin")
+        copied_code = page.evaluate("navigator.clipboard.readText()")
+        assert "print(" in copied_code and "# Jawaban uji" not in copied_code and "```" not in copied_code
         page.locator("#assistantInput").fill("Jelaskan lebih lanjut")
         page.locator("#assistantSend").click()
         expect(page.locator("#assistantMessages .message")).to_have_count(4)
@@ -293,6 +357,15 @@ def main():
             for theme in ("light", "dark"):
                 page.locator("html").evaluate("(el, theme) => el.dataset.theme = theme", theme)
                 check_layout(f"assistant-conversation-{width}-{theme}")
+                if width == 360 and theme == "light":
+                    for selector in ('#assistantMessages .markdown-table', '#assistantMessages pre'):
+                        page.locator(selector).first.focus()
+                        page.keyboard.press('ArrowRight')
+                        page.wait_for_function('(selector) => document.querySelector(selector).scrollLeft > 0', arg=selector)
+                        page.locator(selector).first.evaluate('el => el.scrollLeft = 0')
+                    page.locator('#assistantMessages .markdown-body').evaluate_all("items => items.forEach(el => el.style.fontSize = '200%')")
+                    check_layout('assistant-markdown-text-200-percent')
+                    page.locator('#assistantMessages .markdown-body').evaluate_all("items => items.forEach(el => el.style.fontSize = '')")
                 assert page.locator('#assistantMessages .message').last.bounding_box()["y"] + page.locator('#assistantMessages .message').last.bounding_box()["height"] <= page.locator('#assistantForm').bounding_box()["y"]
                 page.screenshot(path=str(output / f"assistant-{width}-{theme}.png"), full_page=True)
         page.reload()
@@ -319,6 +392,7 @@ def main():
         expect(page.locator("#assistantWelcome")).to_be_visible()
         assert not state["conversations"]
         log.append("Ruang Chat: model refresh/select, keyboard send/newlines, multiturn, safe code, clipboard, reload/history, new, delete, error recovery, both themes and four widths")
+        log.append("Markdown: semantic headings, nested/ordered lists, table, emphasis, inline/fenced code, quote, link safety, nine XSS/image samples, block-only copy, local parser bundle")
 
         nav("brand")
         page.locator('#brandForm [name="name"]').fill("[Data uji] Perusahaan")

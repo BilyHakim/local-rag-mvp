@@ -29,16 +29,10 @@
       const body = document.createElement('div'); body.className = 'message-content';
       const label = document.createElement('strong'); label.textContent = turn.role === 'user' ? 'Anda' : 'Ruang Chat';
       body.append(label);
-      const parts = turn.role === 'assistant' ? turn.content.split(/```[^\n]*\n([\s\S]*?)```/g) : [turn.content];
-      parts.forEach((text, index) => {
-        const block = document.createElement(index % 2 ? 'pre' : 'p');
-        if (index % 2) {
-          const code = document.createElement('code'); code.textContent = text; block.append(code);
-        } else {
-          block.innerHTML = escapeHtml(text).replace(/\*\*([^\n]+?)\*\*/g, '<strong>$1</strong>').replace(/`([^`\n]+)`/g, '<code>$1</code>');
-        }
-        body.append(block);
-      });
+      if (turn.role === 'assistant') body.append(renderChatMarkdown(turn.content, copy));
+      else {
+        const paragraph = document.createElement('p'); paragraph.textContent = turn.content; body.append(paragraph);
+      }
       if (turn.role === 'assistant') {
         const button = document.createElement('button'); button.type = 'button'; button.className = 'workspace-button';
         button.textContent = 'Salin jawaban'; button.addEventListener('click', () => copy(turn.content)); body.append(button);

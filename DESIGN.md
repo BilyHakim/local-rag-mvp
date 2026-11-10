@@ -1,5 +1,13 @@
 # Workspace design direction
 
+Markdown answers retain ENERGY 2 / RHYTHM 2 / MOTION 1 and the studio theme.
+Use real headings and lists for reading hierarchy, theme-token table headers for
+comparison, and monospace only for code. Tight paragraph spacing removes the
+excess blank lines from plain-text rendering. Wide tables and unwrapped code scroll
+inside keyboard-focusable regions; they never widen the page. Code toolbars name
+the language and copy only that block. Quote surfaces group quoted content without
+decorative stripes. Raw HTML and remote image loading are disabled; no new assets.
+
 Plan filtering retains the current 2/2/1 studio direction. Show the configured
 GOAT filter in each existing model status line so users understand the shorter
 catalog. Keep model selection and refresh controls unchanged; label quota as a
