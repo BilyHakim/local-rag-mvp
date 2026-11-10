@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     AI_API_BASE_URL: str = "https://api.openai.com/v1"
     AI_API_KEY: str = ""
     AI_CHAT_MODEL: str = ""
+    COMMANDCODE_PLAN: Literal["catalog", "goat"] = "catalog"
     EMBEDDING_PROVIDER: Literal["ollama", "api"] = "ollama"
     AI_EMBEDDING_MODEL: str = ""
     IMAGE_API_BASE_URL: str = "https://api.openai.com/v1"

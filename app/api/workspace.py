@@ -113,6 +113,9 @@ async def list_campaigns():
 async def create_campaign(payload: CampaignRequest):
     token = await select_model(payload.model)
     try:
+        from app.services.commandcode_plans import active_plan
+        if active_plan() == "goat":
+            payload.model = chat_model_context.get()
         return await campaigns.create_campaign(payload)
     finally:
         chat_model_context.reset(token)

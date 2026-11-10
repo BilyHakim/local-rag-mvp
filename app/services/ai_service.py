@@ -32,6 +32,14 @@ class AIResponseError(AIProviderError):
         self.args = (detail,)
 
 
+class AIModelAccessError(AIProviderError):
+    def __init__(self):
+        super().__init__(403)
+        self.status_code = 422
+        self.detail = "Model ini tidak termasuk filter paket CommandCode GOAT. Muat ulang daftar model dan pilih model yang tersedia."
+        self.args = (self.detail,)
+
+
 class AIService:
     def __init__(self):
         self._client = None
@@ -48,6 +56,9 @@ class AIService:
 
     async def chat_api(self, system: str, user: str, max_tokens: int = 2048, *, history: list | None = None) -> str:
         from app.services.model_service import chat_model_context
+        from app.services.commandcode_plans import model_allowed
+        if not model_allowed(chat_model_context.get() or settings.AI_CHAT_MODEL):
+            raise AIModelAccessError()
         payload = {"model": chat_model_context.get() or settings.AI_CHAT_MODEL,
                    "messages": [{"role": "system", "content": system}, *(history or []), {"role": "user", "content": user}],
                    "max_completion_tokens": max_tokens}

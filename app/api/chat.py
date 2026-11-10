@@ -24,10 +24,12 @@ async def chat_models():
 
 
 async def select_model(model: str | None):
-    if model is not None:
+    from app.services.commandcode_plans import active_plan
+    if model is not None or active_plan() == "goat":
         catalog = await list_chat_models()
+        model = model or catalog["default_model"]
         if model not in catalog["models"]:
-            raise HTTPException(status_code=422, detail="Model tidak tersedia untuk Chat Completions. Muat ulang daftar model.")
+            raise HTTPException(status_code=422, detail="Model tidak tersedia untuk paket atau endpoint chat saat ini. Muat ulang daftar model.")
     return chat_model_context.set(model)
 
 

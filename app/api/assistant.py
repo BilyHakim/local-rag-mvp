@@ -76,6 +76,7 @@ async def message(payload: MessageRequest, request: Request):
         context[0:0] = [{"role": turn["role"], "content": turn["content"]} for turn in pair]
     token = await select_model(payload.model)
     try:
+        used_model = chat_model_context.get() or settings.AI_CHAT_MODEL
         answer = await ai_service.chat_api(
             "Anda asisten percakapan umum bernama Ruang Chat. Bantu pengguna berdiskusi, menulis, belajar, "
             "menganalisis dan membuat kode. Jawab dalam bahasa pengguna, jelas dan sesuai kebutuhan. "
@@ -86,7 +87,7 @@ async def message(payload: MessageRequest, request: Request):
     finally:
         chat_model_context.reset(token)
     data = {"title": current["title"] if current else payload.message[:70],
-            "model": payload.model or settings.AI_CHAT_MODEL,
+            "model": used_model,
             "messages": turns + [{"role": "user", "content": payload.message}, {"role": "assistant", "content": answer}],
             "context_limited": len(context) < len(turns)}
     if current:

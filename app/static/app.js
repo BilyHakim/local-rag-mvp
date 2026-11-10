@@ -352,8 +352,8 @@ async function loadModels(selectId = 'llmModel', refreshId = 'refreshModels', st
     if (data.models.includes(previous)) select.value = previous;
     select.disabled = !data.models.length;
     status.textContent = data.models.length
-      ? ''
-      : 'Daftar model kosong. Menggunakan model default server.';
+      ? (data.plan === 'goat' ? 'Filter paket CommandCode GOAT. Sisa kuota diperiksa saat mengirim.' : '')
+      : (data.plan === 'goat' ? 'Tidak ada model GOAT yang cocok dengan katalog provider. Periksa konfigurasi paket.' : 'Daftar model kosong. Menggunakan model default server.');
   } catch (error) {
     if (version !== modelLoadVersions.get(selectId)) return;
     select.replaceChildren(new Option('Default server', ''));

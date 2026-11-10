@@ -68,7 +68,7 @@ def main():
         elif path == "/api/health":
             response = {"status": "ok", "env": "local"}
         elif path == "/api/llm/models":
-            response = {"provider": "api", "default_model": "default-uji", "models": ["model-uji", "model-lain"]}
+            response = {"provider": "api", "default_model": "default-uji", "models": ["model-uji", "model-lain"], "plan": "goat"}
         elif path.endswith("/workspace/status"):
             response = {"text_provider": "ollama", "text_model": "model-uji", "image_configured": True,
                         "instagram_configured": True, "public_media_configured": True,
@@ -272,6 +272,7 @@ def main():
         expect(page.locator("#assistantWelcome")).to_be_visible()
         page.locator("#assistantModelsRefresh").click()
         expect(page.locator("#assistantModel")).to_be_enabled()
+        expect(page.locator("#assistantModelStatus")).to_contain_text("Filter paket CommandCode GOAT")
         page.locator("#assistantModel").select_option("model-lain")
         page.locator("#assistantInput").fill("Bantu saya belajar Python")
         page.locator("#assistantInput").press("Shift+Enter")

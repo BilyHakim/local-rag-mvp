@@ -5,6 +5,7 @@ import httpx
 from app.core.config import settings
 from app.services.ai_service import AIProviderError, ai_service
 from app.services.ollama_service import ollama_service
+from app.services.commandcode_plans import active_plan, model_allowed
 
 
 chat_model_context: ContextVar[str | None] = ContextVar("chat_model", default=None)
@@ -33,9 +34,12 @@ async def list_chat_models() -> dict:
             ):
                 continue
             model = item.get("id") if provider == "api" else item.get("name")
-            if isinstance(model, str) and model.strip():
+            if isinstance(model, str) and model.strip() and model_allowed(model):
                 models.add(model)
-        return {"provider": provider, "default_model": default, "models": sorted(models)}
+        available = sorted(models)
+        if active_plan() == "goat" and default not in models:
+            default = available[0] if available else ""
+        return {"provider": provider, "default_model": default, "models": available, "plan": active_plan()}
     except httpx.HTTPStatusError as exc:
         raise AIProviderError(exc.response.status_code) from exc
     except httpx.TimeoutException as exc:

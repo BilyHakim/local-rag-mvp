@@ -1,5 +1,10 @@
 # Workspace design direction
 
+Plan filtering retains the current 2/2/1 studio direction. Show the configured
+GOAT filter in each existing model status line so users understand the shorter
+catalog. Keep model selection and refresh controls unchanged; label quota as a
+send-time check instead of claiming guaranteed account access. No new assets.
+
 Ruang Chat adds one requested navigation destination for general conversations.
 Retain the editorial workspace language, ENERGY 2 / RHYTHM 2 / MOTION 1.
 Use a compact history disclosure above the conversation so narrow screens retain
