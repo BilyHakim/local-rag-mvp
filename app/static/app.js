@@ -331,7 +331,7 @@ document.addEventListener('workspace-identity-changed', () => {
 qsa('.nav-item').forEach(item => { item.setAttribute('aria-label', item.textContent.trim()); });
 qsa('svg').forEach(icon => icon.setAttribute('aria-hidden', 'true'));
 const initialView = location.hash.slice(1);
-if (['chat', 'knowledge', 'seo', 'social', 'brand'].includes(initialView)) switchView(initialView, false);
+if (['chat', 'assistant', 'knowledge', 'seo', 'social', 'brand'].includes(initialView)) switchView(initialView, false);
 const modelLoadVersions = new Map();
 async function loadModels(selectId = 'llmModel', refreshId = 'refreshModels', statusId = 'modelStatus') {
   const version = (modelLoadVersions.get(selectId) || 0) + 1;

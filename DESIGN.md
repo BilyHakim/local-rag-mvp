@@ -1,5 +1,13 @@
 # Workspace design direction
 
+Ruang Chat adds one requested navigation destination for general conversations.
+Retain the editorial workspace language, ENERGY 2 / RHYTHM 2 / MOTION 1.
+Use a compact history disclosure above the conversation so narrow screens retain
+space for reading. User messages use the existing soft surface; assistant answers
+use plain reading space with code blocks separated for copying. The labelled
+composer and cream Send action remain the focus. Existing system type, teal,
+focus states and theme tokens apply; no new decorative assets or animation.
+
 Carousel extension: retain ENERGY 2 / RHYTHM 2 / MOTION 1 and the current
 editorial studio direction. Numbered previews follow reading order in a wrapping
 grid, so infographics remain inspectable on phones. Native earlier/later buttons

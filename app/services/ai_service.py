@@ -46,10 +46,10 @@ class AIService:
         if self._client is not None:
             await self._client.aclose()
 
-    async def chat_api(self, system: str, user: str, max_tokens: int = 2048) -> str:
+    async def chat_api(self, system: str, user: str, max_tokens: int = 2048, *, history: list | None = None) -> str:
         from app.services.model_service import chat_model_context
         payload = {"model": chat_model_context.get() or settings.AI_CHAT_MODEL,
-                   "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
+                   "messages": [{"role": "system", "content": system}, *(history or []), {"role": "user", "content": user}],
                    "max_completion_tokens": max_tokens}
         host = urlsplit(settings.AI_API_BASE_URL).hostname
         if host == "generativelanguage.googleapis.com":

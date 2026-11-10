@@ -185,6 +185,20 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
 .result-item p { margin: 0; color: var(--muted); overflow-wrap: anywhere; }
 .score { color: var(--muted); font-size: 12px; }
 .empty-note { color: var(--muted); font-size: 13px; line-height: 1.7; margin: 0; }
+.assistant-history { border-bottom: 1px solid var(--line); margin-bottom: 24px; }
+.assistant-wrap > .assistant-history, .assistant-wrap > .workspace-error, .assistant-wrap > #assistantContext { width: min(100%, 960px); }
+.assistant-history-controls { display: flex; align-items: end; flex-wrap: wrap; gap: 12px; margin-bottom: 16px; }
+.assistant-history-controls .field { flex: 1 1 220px; margin: 0; }
+.assistant-history .empty-note { margin-bottom: 16px; }
+.assistant-wrap .message-content { min-width: 0; max-width: 100%; }
+.assistant-wrap .composer { position: static; }
+.assistant-wrap .message-content p { white-space: pre-wrap; }
+.assistant-wrap pre { padding: 16px; border: 1px solid var(--control-line); border-radius: 8px; background: var(--input); color: var(--ink); white-space: pre-wrap; overflow-wrap: anywhere; }
+.assistant-wrap code { font-family: Consolas, monospace; font-size: .92em; }
+.assistant-wrap .workspace-error { margin-block: 16px; }
+.assistant-wrap #assistantContext { margin-block: 16px; }
+#assistantModelsRefresh { width: auto; flex-basis: auto; padding-inline: 10px; }
+#assistantForm textarea { min-height: 100px; max-height: 320px; resize: vertical; }
 .workspace-tabs { display: flex; flex-wrap: wrap; gap: 24px; border-bottom: 1px solid var(--line); margin-bottom: 28px; }
 .workspace-tabs button { position: relative; padding: 12px 0 16px; min-height: 48px; color: var(--muted); background: transparent; font-size: 14px; font-weight: 600; }
 .workspace-tabs button:hover, .workspace-tabs button.active { color: var(--accent); }

@@ -41,7 +41,7 @@ def main():
     output = Path(args.output)
     output.mkdir(parents=True, exist_ok=True)
     log, errors, contrast_results = [], [], []
-    state = {"profile": {}, "posts": {}, "campaigns": {}, "audits": [], "publishes": 0}
+    state = {"profile": {}, "posts": {}, "campaigns": {}, "audits": [], "publishes": 0, "conversations": {}}
     buffer = io.BytesIO()
     Image.new("RGB", (1024, 1024), "#0F42C0").save(buffer, "JPEG")
 
@@ -77,6 +77,23 @@ def main():
             if request.method == "PUT":
                 state["profile"] = data
             response = state["profile"]
+        elif path == "/api/assistant/conversations":
+            response = list(state["conversations"].values())
+        elif path == "/api/assistant/messages":
+            chat_id = data.get("conversation_id") or "e" * 32
+            previous = state["conversations"].get(chat_id, {})
+            response = {"id": chat_id, "revision": previous.get("revision", 0) + 1, "title": previous.get("title", data["message"]),
+                        "model": data.get("model") or "model-uji", "updated_at": "2026-11-10T10:00:00Z", "context_limited": False,
+                        "messages": previous.get("messages", []) + [{"role": "user", "content": data["message"]},
+                        {"role": "assistant", "content": "**Jawaban uji**\nBerikut kode:\n```python\nprint('<script>uji</script>')\n```\nPenjelasan dari fixture."}]}
+            state["conversations"][chat_id] = response
+        elif path.startswith("/api/assistant/conversations/"):
+            chat_id = path.rsplit("/", 1)[-1]
+            if request.method == "DELETE":
+                del state["conversations"][chat_id]
+                response = {"message": "Percakapan dihapus."}
+            else:
+                response = state["conversations"][chat_id]
         elif path == "/api/chat-rag":
             assert data.get("model") == "model-lain", data
             response = {"answer": "Jawaban dari dokumen uji.", "status": "answered", "sources": [{"source_name": "Dokumen uji", "text": "Bukti pengujian antarmuka."}]}
@@ -207,7 +224,7 @@ def main():
                     page.locator("#themeToggle").click()
                     if width <= 760:
                         page.keyboard.press("Escape")
-                for view in ("chat", "seo", "social", "brand", "knowledge"):
+                for view in ("chat", "assistant", "seo", "social", "brand", "knowledge"):
                     nav(view)
                     check_layout(f"{view}-{width}-{theme}")
                     if view == "chat":
@@ -240,7 +257,7 @@ def main():
                     assert page.evaluate("document.querySelector('.sidebar').contains(document.activeElement)")
                     page.locator("#sidebarBackdrop").click(position={"x": 340, "y": 200}, force=True)
                     assert not page.locator("#mainContent").evaluate("el => el.inert")
-            log.append(f"All five views: {width}px, light/dark, no horizontal overflow, text contrast checked")
+            log.append(f"All six views: {width}px, light/dark, no horizontal overflow, text contrast checked")
 
         page.set_viewport_size({"width": 1440, "height": 1000})
         page.locator("#sidebarCollapse").click()
@@ -250,6 +267,57 @@ def main():
         expect(page.locator("#accessStatus")).to_have_text("admin")
         expect(page.locator("#logoutButton")).to_be_enabled()
         log.append("Workspace identity: username visible and logout control enabled; live authentication verified separately")
+
+        nav("assistant")
+        expect(page.locator("#assistantWelcome")).to_be_visible()
+        page.locator("#assistantModelsRefresh").click()
+        expect(page.locator("#assistantModel")).to_be_enabled()
+        page.locator("#assistantModel").select_option("model-lain")
+        page.locator("#assistantInput").fill("Bantu saya belajar Python")
+        page.locator("#assistantInput").press("Shift+Enter")
+        page.locator("#assistantInput").press("Enter")
+        expect(page.locator("#assistantMessages .message")).to_have_count(2)
+        expect(page.locator("#assistantMessages pre code")).to_contain_text("<script>uji</script>")
+        assert page.locator("#assistantMessages script").count() == 0
+        assert state["conversations"]["e" * 32]["model"] == "model-lain"
+        context.grant_permissions(["clipboard-read", "clipboard-write"])
+        page.get_by_role("button", name="Salin jawaban", exact=True).click()
+        expect(page.locator("#toast")).to_contain_text("Teks disalin")
+        assert "print(" in page.evaluate("navigator.clipboard.readText()")
+        page.locator("#assistantInput").fill("Jelaskan lebih lanjut")
+        page.locator("#assistantSend").click()
+        expect(page.locator("#assistantMessages .message")).to_have_count(4)
+        for width in (360, 768, 1024, 1440):
+            page.set_viewport_size({"width": width, "height": 1000})
+            for theme in ("light", "dark"):
+                page.locator("html").evaluate("(el, theme) => el.dataset.theme = theme", theme)
+                check_layout(f"assistant-conversation-{width}-{theme}")
+                assert page.locator('#assistantMessages .message').last.bounding_box()["y"] + page.locator('#assistantMessages .message').last.bounding_box()["height"] <= page.locator('#assistantForm').bounding_box()["y"]
+                page.screenshot(path=str(output / f"assistant-{width}-{theme}.png"), full_page=True)
+        page.reload()
+        expect(page.locator("#assistantWelcome")).to_be_visible()
+        page.locator(".assistant-history summary").click()
+        expect(page.locator('#assistantHistory option[value="' + "e" * 32 + '"]')).to_have_count(1)
+        page.locator("#assistantHistory").select_option("e" * 32)
+        expect(page.locator("#assistantMessages .message")).to_have_count(4)
+        page.locator("#assistantRefresh").click()
+        page.locator("#assistantNew").click()
+        expect(page.locator("#assistantDelete")).to_be_disabled()
+        expect(page.locator("#assistantWelcome")).to_be_visible()
+        page.locator("#assistantHistory").select_option("e" * 32)
+        expect(page.locator("#assistantMessages .message")).to_have_count(4)
+        page.route("**/api/assistant/messages", lambda route: route.fulfill(status=503, json={"detail": "Provider uji sibuk"}))
+        page.locator("#assistantInput").fill("Pesan tetap tersimpan saat gagal")
+        page.locator("#assistantSend").click()
+        expect(page.locator("#assistantError")).to_contain_text("Provider uji sibuk")
+        expect(page.locator("#assistantInput")).to_have_value("Pesan tetap tersimpan saat gagal")
+        expect(page.locator("#assistantMessages .message")).to_have_count(4)
+        page.unroute("**/api/assistant/messages")
+        page.once("dialog", lambda dialog: dialog.accept())
+        page.locator("#assistantDelete").click()
+        expect(page.locator("#assistantWelcome")).to_be_visible()
+        assert not state["conversations"]
+        log.append("Ruang Chat: model refresh/select, keyboard send/newlines, multiturn, safe code, clipboard, reload/history, new, delete, error recovery, both themes and four widths")
 
         nav("brand")
         page.locator('#brandForm [name="name"]').fill("[Data uji] Perusahaan")

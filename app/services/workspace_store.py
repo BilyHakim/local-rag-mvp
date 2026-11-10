@@ -90,6 +90,14 @@ def set_profile(data):
     return get("profile", "brand")
 
 
+def delete(kind, record_id, revision):
+    with connection() as db:
+        result = db.execute("DELETE FROM records WHERE tenant=? AND kind=? AND id=? AND revision=?",
+                            (tenant_context.get(), kind, record_id, revision))
+        if result.rowcount != 1:
+            raise ValueError("Percakapan berubah. Muat ulang sebelum menghapus.")
+
+
 def due_jobs():
     with connection() as db:
         rows = db.execute("SELECT tenant,id FROM records WHERE kind='post' AND status='scheduled' AND scheduled_at<=? ORDER BY scheduled_at LIMIT 20", (now_iso(),)).fetchall()

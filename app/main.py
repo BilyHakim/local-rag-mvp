@@ -21,6 +21,7 @@ from app.services.rag_errors import RagDependencyError
 from app.api.workspace import router as workspace_router, media_router
 from app.services.publishing_service import scheduler_loop
 from app.api.auth import router as auth_router
+from app.api.assistant import router as assistant_router
 from app.services import auth_service
 from fastapi import Request
 from fastapi.responses import RedirectResponse
@@ -54,6 +55,7 @@ app.add_middleware(SecurityMiddleware)
 app.include_router(workspace_router, prefix="/api", tags=["workspace"])
 app.include_router(media_router)
 app.include_router(auth_router)
+app.include_router(assistant_router, prefix="/api", tags=["assistant"])
 
 
 @app.exception_handler(AIProviderError)

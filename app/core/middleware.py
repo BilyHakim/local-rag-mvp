@@ -68,8 +68,10 @@ class SecurityMiddleware:
             return await reject(401, "Silakan login untuk mengakses workspace.")
         principal = principal or {"tenant": "unauthenticated", "role": "anonymous"}
         scope.setdefault("state", {})["principal"] = principal
-        reader_paths = {"/api/chat-rag", "/api/knowledge/search", "/api/ready"}
-        if principal["role"] != "admin" and path not in reader_paths | {"/api/auth/me", "/api/auth/login", "/api/auth/logout"}:
+        reader_paths = {"/api/chat-rag", "/api/knowledge/search", "/api/ready", "/api/llm/models",
+                        "/api/assistant/messages", "/api/assistant/conversations"}
+        own_conversation = re.fullmatch(r"/api/assistant/conversations/[a-f0-9]{32}", path)
+        if principal["role"] != "admin" and not own_conversation and path not in reader_paths | {"/api/auth/me", "/api/auth/login", "/api/auth/logout"}:
             return await reject(403, "Akses admin diperlukan")
         now = time.monotonic()
         rate_key = token or (principal["tenant"] + ":" + principal.get("username", "session"))
