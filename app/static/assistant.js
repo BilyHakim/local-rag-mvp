@@ -2,11 +2,13 @@
   let current = null, busy = false, epoch = 0, loaded = false;
   const root = qs('#assistantMessages'), input = qs('#assistantInput');
   const endpoint = '/api/assistant';
+  const popup = qs('#assistantHistoryPopup');
   const json = body => ({ method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   const error = message => { qs('#assistantError').textContent = message; qs('#assistantError').hidden = !message; };
 
   function controls() {
-    ['assistantNew', 'assistantHistory', 'assistantRefresh', 'assistantSend'].forEach(id => { qs('#' + id).disabled = busy; });
+    ['assistantNew', 'assistantHistoryOpen', 'assistantRefresh', 'assistantSend'].forEach(id => { qs('#' + id).disabled = busy; });
+    qsa('.assistant-history-item').forEach(button => { button.disabled = busy; button.setAttribute('aria-current', String(button.dataset.id === current?.id)); });
     qs('#assistantDelete').disabled = busy || !current;
     input.disabled = busy;
     qs('#assistantForm').setAttribute('aria-busy', String(busy));
@@ -39,7 +41,6 @@
       }
       article.append(body); root.append(article);
     }
-    qs('#assistantHistory').value = conversation?.id || '';
     controls();
   }
 
@@ -49,10 +50,18 @@
     try {
       const items = await api(endpoint + '/conversations');
       if (version !== epoch) return;
-      qs('#assistantHistory').replaceChildren(new Option('Percakapan baru', ''), ...items.map(item => new Option(item.title, item.id)));
-      qs('#assistantHistory').value = current?.id || '';
+      qs('#assistantHistory').replaceChildren(...items.map(item => {
+        const button = document.createElement('button'); button.type = 'button'; button.className = 'assistant-history-item'; button.dataset.id = item.id;
+        const title = document.createElement('strong'); title.textContent = item.title; button.append(title);
+        if (item.updated_at && !Number.isNaN(Date.parse(item.updated_at))) {
+          const date = document.createElement('small'); date.textContent = new Date(item.updated_at).toLocaleString('id-ID'); button.append(date);
+        }
+        button.addEventListener('click', () => selectConversation(item.id));
+        return button;
+      }));
       qs('#assistantHistoryStatus').textContent = items.length ? `${items.length} percakapan tersimpan.` : 'Belum ada percakapan. Kirim pesan pertama untuk memulai.';
       loaded = true;
+      controls();
     } catch (e) { if (version === epoch) qs('#assistantHistoryStatus').textContent = e.message + ' Klik Muat ulang riwayat untuk mencoba lagi.'; }
   }
 
@@ -61,8 +70,8 @@
     const version = epoch;
     busy = true; error(''); controls();
     try { await action(version); }
-    catch (e) { if (version === epoch) error(e.message); }
-    finally { if (version === epoch) { busy = false; controls(); qs('#assistantHistory').value = current?.id || ''; } }
+    catch (e) { if (version === epoch) { error(e.message); if (popup.open) qs('#assistantHistoryStatus').textContent = e.message; } }
+    finally { if (version === epoch) { busy = false; controls(); } }
   }
 
   qs('#assistantForm').addEventListener('submit', async event => {
@@ -83,15 +92,23 @@
   });
   qs('#assistantNew').addEventListener('click', () => { render(null); error(''); input.value = ''; input.focus(); });
   qs('#assistantRefresh').addEventListener('click', () => run(() => history()));
-  qs('#assistantHistory').addEventListener('change', event => {
-    const id = event.target.value;
+  function selectConversation(id) {
     run(async version => {
       const conversation = id ? await api(`${endpoint}/conversations/${id}`) : null;
       if (version !== epoch) return;
       render(conversation); input.value = '';
       if (conversation?.model && [...qs('#assistantModel').options].some(option => option.value === conversation.model)) qs('#assistantModel').value = conversation.model;
+      popup.close();
+      root.scrollIntoView({ block: 'start' });
     });
+  }
+  qs('#assistantHistoryOpen').addEventListener('click', () => { popup.showModal(); run(() => history()); });
+  qs('#assistantHistoryClose').addEventListener('click', () => popup.close());
+  popup.addEventListener('click', event => {
+    const rect = popup.getBoundingClientRect();
+    if (event.target === popup && (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom)) popup.close();
   });
+  popup.addEventListener('close', () => { if (qs('#assistantView').classList.contains('active')) qs('#assistantHistoryOpen').focus({ preventScroll: true }); });
   qs('#assistantDelete').addEventListener('click', () => {
     if (!current || !window.confirm('Hapus percakapan ini beserta seluruh pesannya?')) return;
     run(async version => {
@@ -104,10 +121,10 @@
   function open() {
     if (!loaded) { history(); loadModels('assistantModel', 'assistantModelsRefresh', 'assistantModelStatus'); }
   }
-  document.addEventListener('workspace-view-changed', event => { if (event.detail.view === 'assistant') open(); });
+  document.addEventListener('workspace-view-changed', event => { if (event.detail.view === 'assistant') open(); else popup.close(); });
   document.addEventListener('workspace-identity-changed', () => {
     epoch++; busy = false; loaded = false; render(null); input.value = ''; error('');
-    qs('#assistantHistory').replaceChildren(new Option('Percakapan baru', ''));
+    popup.close(); qs('#assistantHistory').replaceChildren();
     qs('#assistantModel').replaceChildren(new Option('Default server', ''));
     if (qs('#assistantView').classList.contains('active')) open();
   });

@@ -1,5 +1,16 @@
 # Workspace design direction
 
+Ruang Chat history uses one quiet button and a native floating dialog. A scrollable
+list opens conversations directly; refresh and deletion of the active conversation
+remain in its footer. Existing theme tokens, 44px controls and restrained popover
+shadow apply. Native modal focus handling, Escape/backdrop dismissal and return focus
+keep the popup usable on keyboard and phone. ENERGY 2 / RHYTHM 2 / MOTION 1.
+
+Header search is a compact single row: a visible Knowledge label, short query
+field and 44px magnifier submit button. The transparent teal surface matches the
+navigation; sky outline and pale labels preserve contrast in both themes. Desktop
+width is capped at 420px so search does not dominate the account/header area.
+
 Reference-led shell redesign: use the supplied Hubby screenshot's inset workspace,
 curved navigation join, roomy utility header and rounded section introduction.
 The user requests title banners match the navigation teal in both themes; white

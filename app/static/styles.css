@@ -103,11 +103,13 @@ summary:hover { color: var(--accent); text-decoration: underline; text-underline
 .main { grid-column: 2; min-width: 0; padding-right: 24px; }
 .utility-bar { min-height: 104px; padding: 16px 8px 16px var(--page-pad); display: flex; align-items: center; justify-content: space-between; gap: 24px; color: white; }
 .utility-home { display: none; }
-.utility-search { flex: 1; max-width: 560px; min-width: 0; padding: 8px 14px; border: 1px solid var(--sky); background: var(--soft); color: var(--ink); border-radius: 18px; }
-.utility-search > label { display: block; padding-left: 30px; color: var(--muted); font-size: 11px; font-weight: 600; }
-.utility-search-field { display: flex; align-items: center; gap: 10px; }
-.utility-search input { min-width: 0; width: 100%; min-height: 44px; padding: 4px 0; border: 0; background: transparent; color: var(--ink); font-size: 14px; }
-.utility-search button { min-height: 44px; padding: 4px 10px; border: 1px solid var(--control-line); border-radius: 10px; color: var(--ink); background: var(--surface); font-size: 13px; font-weight: 600; }
+.utility-search { display: flex; align-items: center; gap: 12px; flex: 1; max-width: 420px; min-width: 0; padding: 0 4px 0 14px; border: 1px solid var(--sky); background: transparent; color: white; border-radius: 12px; }
+.utility-search > label { flex: 0 0 auto; color: #d9effb; font-size: 12px; font-weight: 600; }
+.utility-search-field { display: flex; flex: 1; min-width: 0; align-items: center; gap: 4px; }
+.utility-search input { min-width: 0; width: 100%; min-height: 44px; padding: 4px 0; border: 0; background: transparent; color: white; font-size: 14px; }
+.utility-search input::placeholder { color: #d9effb; }
+.utility-search button { display: grid; place-items: center; flex: 0 0 44px; width: 44px; min-height: 44px; padding: 10px; border-radius: 8px; color: white; background: transparent; }
+.utility-search button:hover { background: #0b5271; }
 .utility-bar .utility-account-actions { flex-wrap: nowrap; gap: 16px; }
 .utility-bar .utility-account-actions > button { flex: 0 0 auto; }
 .utility-account { display: flex; align-items: center; gap: 14px; min-height: 48px; padding: 0; background: transparent; color: white; font-size: 14px; font-weight: 600; }
@@ -116,7 +118,7 @@ summary:hover { color: var(--accent); text-decoration: underline; text-underline
 .utility-bar #logoutButton { color: white; background: transparent; border-color: var(--sky); border-radius: 14px; }
 .utility-bar #logoutButton:hover { background: #0b5271; }
 .utility-bar :focus-visible { outline-color: var(--cream); }
-.utility-search :focus-visible { outline-color: var(--accent); }
+.utility-search :focus-visible { outline-color: var(--cream); }
 .utility-label { color: var(--muted); font-size: 12px; }
 .access-control { position: relative; }
 .access-control > summary { min-height: 44px; gap: 8px; color: var(--ink); font-size: 12px; padding: 8px 0 8px 12px; }
@@ -253,11 +255,21 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
   #folderProgress::-webkit-progress-value { transition: width .2s linear; }
   #folderProgress::-moz-progress-bar { transition: width .2s linear; }
 }
-.assistant-history { border-bottom: 1px solid var(--line); margin-bottom: 24px; }
+.assistant-history { margin-bottom: 24px; }
 .assistant-wrap > .assistant-history, .assistant-wrap > .workspace-error, .assistant-wrap > #assistantContext { width: min(100%, 960px); }
-.assistant-history-controls { display: flex; align-items: end; flex-wrap: wrap; gap: 12px; margin-bottom: 16px; }
-.assistant-history-controls .field { flex: 1 1 220px; margin: 0; }
-.assistant-history .empty-note { margin-bottom: 16px; }
+.assistant-history-popup { width: min(520px, calc(100% - 32px)); max-height: calc(100dvh - 48px); padding: 0; border: 1px solid var(--control-line); border-radius: 24px; color: var(--ink); background: var(--surface); box-shadow: 0 24px 72px #10245340; }
+.assistant-history-popup[open] { display: flex; flex-direction: column; }
+.assistant-history-popup::backdrop { background: #082d4266; }
+.assistant-history-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 20px; border-bottom: 1px solid var(--line); }
+.assistant-history-heading h2 { margin: 0; font-size: 21px; }
+.assistant-history-popup > .empty-note { margin: 0; padding: 16px 20px 8px; }
+.assistant-history-list { min-height: 0; overflow: auto; padding: 12px 20px 20px; }
+.assistant-history-item { display: block; width: 100%; min-height: 48px; padding: 14px; margin-bottom: 8px; border: 1px solid transparent; border-radius: 12px; text-align: left; color: var(--ink); background: transparent; overflow-wrap: anywhere; }
+.assistant-history-item:hover { background: var(--hover); }
+.assistant-history-item[aria-current=true] { border-color: var(--control-line); background: var(--soft); }
+.assistant-history-item strong, .assistant-history-item small { display: block; }
+.assistant-history-item small { margin-top: 4px; color: var(--muted); }
+.assistant-history-controls { display: flex; flex-wrap: wrap; gap: 12px; padding: 16px 20px; border-top: 1px solid var(--line); }
 .assistant-wrap .message-content { min-width: 0; max-width: 100%; }
 .assistant-wrap .composer { position: static; }
 .assistant-wrap .message-content p { white-space: pre-wrap; }
@@ -448,7 +460,7 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
   .utility-account-actions { margin-left: auto; gap: 10px; }
   .utility-account #accessStatus { display: none; }
   .account-initials { width: 44px; height: 44px; border-radius: 14px; }
-  .utility-search { flex: 1 1 100%; max-width: none; order: 3; padding: 8px 12px; }
+  .utility-search { flex: 1 1 100%; max-width: none; order: 3; padding: 0 4px 0 12px; }
   .utility-search input { font-size: 16px; }
   .utility-account-actions > button { flex: 0 0 auto; }
   .view.active { padding-top: 20px; border-radius: 28px 28px 0 0; }

@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="Workspace untuk knowledge perusahaan, audit SEO, dan produksi konten social media.">
   <title>Company AI Workspace</title>
-  <link rel="stylesheet" href="/static/styles.css?v=26">
+  <link rel="stylesheet" href="/static/styles.css?v=28">
 </head>
 <body>
   <a class="skip-link" href="#mainContent">Langsung ke area kerja</a>
@@ -59,8 +59,8 @@
       <div class="utility-bar">
         <a class="utility-home" href="#chat">Local <strong>RAG</strong></a>
         <form class="utility-search" id="workspaceSearchForm" role="search">
-          <label for="workspaceSearch">Cari knowledge</label>
-          <div class="utility-search-field"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10" cy="10" r="6"/><path d="m15 15 6 6"/></svg><input id="workspaceSearch" type="search" placeholder="Dokumen, produk, atau informasi..." minlength="2" maxlength="4000" required><button type="submit">Cari</button></div>
+          <label for="workspaceSearch">Knowledge</label>
+          <div class="utility-search-field"><input id="workspaceSearch" type="search" placeholder="Cari informasi..." minlength="2" maxlength="4000" required><button type="submit" aria-label="Cari knowledge" title="Cari knowledge"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10" cy="10" r="6"/><path d="m15 15 6 6"/></svg></button></div>
         </form>
         <div class="workspace-actions utility-account-actions"><button class="utility-account" type="button" id="workspaceAccount" aria-label="Buka profil saya"><span id="accessStatus">Memeriksa sesi...</span><span class="account-initials" id="accountInitials" aria-hidden="true">…</span></button><button class="workspace-button" type="button" id="logoutButton">Keluar</button></div>
       </div>
@@ -124,7 +124,13 @@
       <section class="view" id="assistantView">
         <header class="topbar"><button class="mobile-menu" data-mobile-menu aria-label="Buka menu">Menu</button><div><p class="eyebrow">Workspace / Percakapan</p><h1>Ruang Chat</h1></div><button class="new-chat" id="assistantNew" type="button">Percakapan baru</button></header>
         <div class="chat-wrap assistant-wrap">
-          <details class="assistant-history"><summary>Riwayat percakapan</summary><div class="assistant-history-controls"><label class="field" for="assistantHistory">Buka percakapan<select id="assistantHistory"><option value="">Percakapan baru</option></select></label><button class="workspace-button" id="assistantRefresh" type="button">Muat ulang riwayat</button><button class="workspace-button" id="assistantDelete" type="button" disabled>Hapus percakapan</button></div><p class="empty-note" id="assistantHistoryStatus" role="status">Riwayat dimuat saat Anda membuka Ruang Chat.</p></details>
+          <div class="assistant-history"><button class="workspace-button" id="assistantHistoryOpen" type="button" aria-haspopup="dialog" aria-controls="assistantHistoryPopup">Riwayat percakapan</button></div>
+          <dialog class="assistant-history-popup" id="assistantHistoryPopup" aria-labelledby="assistantHistoryTitle" aria-describedby="assistantHistoryStatus">
+            <header class="assistant-history-heading"><h2 id="assistantHistoryTitle">Riwayat percakapan</h2><button class="workspace-button" id="assistantHistoryClose" type="button" autofocus>Tutup</button></header>
+            <p class="empty-note" id="assistantHistoryStatus" role="status">Memuat riwayat...</p>
+            <div class="assistant-history-list" id="assistantHistory"></div>
+            <footer class="assistant-history-controls"><button class="workspace-button" id="assistantRefresh" type="button">Muat ulang riwayat</button><button class="workspace-button" id="assistantDelete" type="button" disabled>Hapus percakapan aktif</button></footer>
+          </dialog>
           <div id="assistantMessages" class="messages" role="log" aria-label="Percakapan Ruang Chat" aria-live="polite"><div class="welcome" id="assistantWelcome"><p class="welcome-kicker">Tempat untuk mengembangkan pikiran.</p><h2>Apa yang ingin<br>Anda bahas?</h2><p>Diskusikan ide, susun tulisan, pelajari sesuatu, atau minta bantuan kode. Percakapan menggunakan CommandCode.</p><p class="empty-note">Percakapan tersimpan pada akun workspace Anda. Chat ini belum mendukung pencarian web atau lampiran file.</p></div></div>
           <p class="empty-note" id="assistantContext" hidden>Konteks jawaban dibatasi pada bagian terbaru percakapan. Sebutkan kembali detail lama yang masih diperlukan.</p>
           <p class="workspace-error" id="assistantError" role="alert" hidden></p>
@@ -399,7 +405,7 @@
   <script src="/static/workspace.js?v=8"></script>
   <script src="/static/vendor/markdown-it-15.0.3.min.js"></script>
   <script src="/static/markdown.js?v=1"></script>
-  <script src="/static/assistant.js?v=3"></script>
+  <script src="/static/assistant.js?v=4"></script>
   <script src="/static/account.js?v=1"></script>
   <script src="/static/folder-upload.js?v=1"></script>
   <script src="/static/whatsapp.js?v=1"></script>
