@@ -1,0 +1,7 @@
+﻿nomor_pesanan,tanggal,sku,nama_produk,jumlah,harga_satuan_idr,kota_tujuan,status,catatan_data
+ORD-001,2026-11-02,KR-101,Kursi Aruna,2,1250000,Bandung,selesai,Fiktif; nilai produk sebelum ongkir
+ORD-002,2026-11-03,LP-303,Lampu Sora,4,275000,Jakarta,selesai,Fiktif; nilai produk sebelum ongkir
+ORD-003,2026-11-04,MJ-202,Meja Nara,1,1800000,Surabaya,diproses,Fiktif; nilai produk sebelum ongkir
+ORD-004,2026-11-05,BT-404,Botol Reka,5,120000,Bandung,selesai,Fiktif; nilai produk sebelum ongkir
+ORD-005,2026-11-06,KR-101,Kursi Aruna,1,1250000,Jakarta,dibatalkan,Fiktif; nilai produk sebelum ongkir
+ORD-006,2026-11-09,LP-303,Lampu Sora,2,275000,Bandung,selesai,Fiktif; nilai produk sebelum ongkir
