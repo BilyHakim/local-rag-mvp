@@ -1,5 +1,8 @@
 # Local RAG MVP
 
+Knowledge / RAG memiliki [riwayat percakapan pribadi per akun](docs/RAG_HISTORY.md),
+termasuk jawaban dan sumber yang tersimpan setelah refresh atau login ulang.
+
 Asisten WhatsApp melalui WAHA mendukung reminder terjadwal dan jawaban dari
 knowledge untuk nomor yang diizinkan. Pengaturan memakai password tambahan:
 [panduan WhatsApp](docs/WHATSAPP.md).

@@ -128,7 +128,7 @@ def save_account_profile(principal, revision, data):
 def feature_for_path(path):
     if path.startswith("/api/assistant/"):
         return "assistant"
-    if path in {"/api/chat-rag", "/api/chat-basic", "/api/embedding-test"}:
+    if path.startswith("/api/rag-history/") or path in {"/api/chat-rag", "/api/chat-basic", "/api/embedding-test"}:
         return "chat"
     if path.startswith("/api/workspace/seo/"):
         return "seo"

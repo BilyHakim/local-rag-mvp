@@ -1,13 +1,14 @@
 const qs = (selector, root = document) => root.querySelector(selector);
 const qsa = (selector, root = document) => [...root.querySelectorAll(selector)];
 
-const state = { busy: false, account: null, accountError: '', knowledgeUploadBusy: false };
+const state = { busy: false, account: null, accountError: '', knowledgeUploadBusy: false, ragConversation: null, ragEpoch: 0 };
 const accountFeatures = ['assistant', 'chat', 'seo', 'social'];
 const featureEnabled = view => view === 'whatsapp' ? (!state.account || (state.account.role === 'admin' && state.account.editable)) : !accountFeatures.includes(view) || !state.account || state.account.enabled_features.includes(view);
 
 function applyAccountProfile(profile) {
   const previous = state.account;
   state.account = profile; state.accountError = '';
+  if (previous && (previous.username !== profile.username || previous.tenant !== profile.tenant)) document.dispatchEvent(new Event('rag-history-reset'));
   qs('#accessStatus').textContent = profile.display_name || profile.username || 'API key';
   qs('#accountInitials').textContent = (profile.display_name || profile.username || 'API').trim().split(/\s+/).slice(0, 2).map(word => word[0]).join('').toLocaleUpperCase();
   qs('#workspaceTenant').textContent = profile.tenant || 'Workspace';
@@ -237,26 +238,37 @@ function appendTyping() {
 }
 
 async function ask(question) {
-  if (state.busy || !question.trim()) return;
+  if (state.busy || state.ragHistoryBusy || !question.trim()) return;
+  const version = state.ragEpoch;
   state.busy = true;
   qs('#sendButton').disabled = true;
+  qs('#newChatButton').disabled = true;
+  document.dispatchEvent(new Event('rag-history-state'));
   appendMessage('user', question.trim());
   questionInput.value = '';
   questionInput.style.height = 'auto';
   const typing = appendTyping();
   try {
-    const data = await api('/api/chat-rag', {
+    const personal = state.account?.editable !== false;
+    const data = await api(personal ? '/api/rag-history/messages' : '/api/chat-rag', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ question: question.trim(), top_k: Number(qs('#topK').value), model: qs('#llmModel').value || null })
+      body: JSON.stringify({ question: question.trim(), top_k: Number(qs('#topK').value), model: qs('#llmModel').value || null,
+        ...(personal ? { conversation_id: state.ragConversation?.id || null, revision: state.ragConversation?.revision || null } : {}) })
     });
+    if (version !== state.ragEpoch) return;
     typing.remove();
+    if (data.conversation) state.ragConversation = data.conversation;
     appendMessage('assistant', data.answer, data.status === 'insufficient_evidence' ? [] : (data.sources || []));
   } catch (error) {
+    if (version !== state.ragEpoch) return;
     typing.remove();
     appendMessage('assistant', `Maaf, pertanyaan belum dapat diproses. ${error.message}`);
   } finally {
+    if (version !== state.ragEpoch) return;
     state.busy = false;
     qs('#sendButton').disabled = false;
+    qs('#newChatButton').disabled = false;
+    document.dispatchEvent(new Event('rag-history-state'));
     questionInput.focus();
   }
 }
@@ -283,6 +295,8 @@ questionInput.addEventListener('input', () => {
 });
 qsa('[data-question]').forEach(button => button.addEventListener('click', () => ask(button.dataset.question)));
 qs('#newChatButton').addEventListener('click', () => {
+  state.ragConversation = null;
+  document.dispatchEvent(new Event('rag-history-state'));
   qsa('.message', messages).forEach(message => message.remove());
   welcome.hidden = false;
   questionInput.focus();

@@ -23,6 +23,7 @@ from app.services.publishing_service import scheduler_loop
 from app.api.auth import router as auth_router
 from app.api.assistant import router as assistant_router
 from app.api.whatsapp import router as whatsapp_router, hooks as whatsapp_hooks
+from app.api.rag_history import router as rag_history_router
 from app.services.whatsapp_service import scheduler_loop as whatsapp_loop
 from app.services import auth_service
 from fastapi import Request
@@ -64,6 +65,7 @@ app.include_router(auth_router)
 app.include_router(assistant_router, prefix="/api", tags=["assistant"])
 app.include_router(whatsapp_router)
 app.include_router(whatsapp_hooks)
+app.include_router(rag_history_router)
 
 
 @app.exception_handler(AIProviderError)

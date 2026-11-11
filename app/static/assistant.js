@@ -1,6 +1,6 @@
 (() => {
   let current = null, busy = false, epoch = 0, loaded = false;
-  const root = qs('#assistantMessages'), input = qs('#assistantInput');
+  const root = qs('#assistantMessages'), input = createChatEditor(qs('#assistantInput'));
   const endpoint = '/api/assistant';
   const popup = qs('#assistantHistoryPopup');
   const json = body => ({ method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
@@ -12,7 +12,7 @@
     qs('#assistantDelete').disabled = busy || !current;
     input.disabled = busy;
     qs('#assistantForm').setAttribute('aria-busy', String(busy));
-    qs('#assistantSendStatus').textContent = busy ? 'CommandCode sedang menyiapkan jawaban...' : 'Enter untuk mengirim · Shift + Enter untuk baris baru';
+    qs('#assistantSendStatus').textContent = busy ? 'Menyiapkan jawaban...' : '';
   }
 
   async function copy(text) {
@@ -31,10 +31,7 @@
       const body = document.createElement('div'); body.className = 'message-content';
       const label = document.createElement('strong'); label.textContent = turn.role === 'user' ? 'Anda' : 'Ruang Chat';
       body.append(label);
-      if (turn.role === 'assistant') body.append(renderChatMarkdown(turn.content, copy));
-      else {
-        const paragraph = document.createElement('p'); paragraph.textContent = turn.content; body.append(paragraph);
-      }
+      body.append(renderChatMarkdown(turn.content, copy));
       if (turn.role === 'assistant') {
         const button = document.createElement('button'); button.type = 'button'; button.className = 'workspace-button';
         button.textContent = 'Salin jawaban'; button.addEventListener('click', () => copy(turn.content)); body.append(button);
@@ -78,6 +75,7 @@
     event.preventDefault();
     const message = input.value.trim();
     if (!message) return;
+    if (message.length > 12000) { error('Pesan maksimal 12.000 karakter. Persingkat pesan sebelum mengirim.'); return; }
     await run(async version => {
       const conversation = await api(endpoint + '/messages', json({ message, model: qs('#assistantModel').value || null,
         conversation_id: current?.id || null, revision: current?.revision || null }));
@@ -86,9 +84,6 @@
       root.lastElementChild?.scrollIntoView({ block: 'nearest' });
     });
     if (qs('#assistantView').classList.contains('active')) input.focus({ preventScroll: true });
-  });
-  input.addEventListener('keydown', event => {
-    if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) { event.preventDefault(); qs('#assistantForm').requestSubmit(); }
   });
   qs('#assistantNew').addEventListener('click', () => { render(null); error(''); input.value = ''; input.focus(); });
   qs('#assistantRefresh').addEventListener('click', () => run(() => history()));

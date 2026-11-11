@@ -69,8 +69,9 @@ class SecurityMiddleware:
         principal = principal or {"tenant": "unauthenticated", "role": "anonymous"}
         scope.setdefault("state", {})["principal"] = principal
         reader_paths = {"/api/chat-rag", "/api/knowledge/search", "/api/ready", "/api/llm/models",
-                        "/api/assistant/messages", "/api/assistant/conversations"}
-        own_conversation = re.fullmatch(r"/api/assistant/conversations/[a-f0-9]{32}", path)
+                        "/api/assistant/messages", "/api/assistant/conversations",
+                        "/api/rag-history/messages", "/api/rag-history/conversations"}
+        own_conversation = re.fullmatch(r"/api/(?:assistant|rag-history)/conversations/[a-f0-9]{32}", path)
         if principal["role"] != "admin" and not own_conversation and path not in reader_paths | {"/api/auth/me", "/api/auth/login", "/api/auth/logout", "/api/account/profile", "/api/account/password"}:
             return await reject(403, "Akses admin diperlukan")
         feature = auth.feature_for_path(path)

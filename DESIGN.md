@@ -1,5 +1,19 @@
 # Workspace design direction
 
+Ruang Chat's compact composer keeps the teal studio surface, visible message label,
+and cream Send focal action, with ENERGY 2 / RHYTHM 2 / MOTION 1. A one-line
+editor grows with content up to a bounded scroll area. Model and icon-only refresh
+share one wrapping toolbar; the refresh glyph names a real reload action. Native
+editable lists, headings and emphasis expose Markdown structure while writing;
+sent user messages use the existing safe Markdown renderer. Enter continues lists,
+Ctrl/Command + Enter submits, and plain-text paste excludes external HTML. Existing
+theme colors, 44px actions and keyboard focus apply. No new assets or motion.
+
+Private RAG history reuses the floating history button, native dialog and list
+from Ruang Chat. The label Riwayat RAG saya and explicit account-only note clarify
+ownership; restored answers retain their saved source disclosures. No new colors,
+assets or animation. Existing ENERGY 2 / RHYTHM 2 / MOTION 1 applies.
+
 Ruang Chat history uses one quiet button and a native floating dialog. A scrollable
 list opens conversations directly; refresh and deletion of the active conversation
 remain in its footer. Existing theme tokens, 44px controls and restrained popover

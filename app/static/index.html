@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="Workspace untuk knowledge perusahaan, audit SEO, dan produksi konten social media.">
   <title>Company AI Workspace</title>
-  <link rel="stylesheet" href="/static/styles.css?v=28">
+  <link rel="stylesheet" href="/static/styles.css?v=31">
 </head>
 <body>
   <a class="skip-link" href="#mainContent">Langsung ke area kerja</a>
@@ -81,6 +81,14 @@
         </header>
 
         <div class="chat-wrap">
+          <div class="assistant-history"><button class="workspace-button" id="ragHistoryOpen" type="button" aria-haspopup="dialog" aria-controls="ragHistoryPopup" hidden>Riwayat RAG saya</button></div>
+          <dialog class="assistant-history-popup" id="ragHistoryPopup" aria-labelledby="ragHistoryTitle" aria-describedby="ragHistoryPrivacy ragHistoryStatus">
+            <header class="assistant-history-heading"><h2 id="ragHistoryTitle">Riwayat RAG saya</h2><button class="workspace-button" id="ragHistoryClose" type="button" autofocus>Tutup</button></header>
+            <p class="empty-note" id="ragHistoryPrivacy">Riwayat ini hanya dapat diakses oleh akun Anda.</p>
+            <p class="empty-note" id="ragHistoryStatus" role="status">Memuat riwayat...</p>
+            <div class="assistant-history-list" id="ragHistoryList"></div>
+            <footer class="assistant-history-controls"><button class="workspace-button" id="ragHistoryRefresh" type="button">Muat ulang riwayat</button><button class="workspace-button" id="ragHistoryDelete" type="button" disabled>Hapus percakapan aktif</button></footer>
+          </dialog>
           <div class="messages" id="messages" aria-live="polite">
             <div class="welcome" id="welcomeState">
               <p class="welcome-kicker">Mulai dari informasi yang Anda miliki.</p>
@@ -134,7 +142,14 @@
           <div id="assistantMessages" class="messages" role="log" aria-label="Percakapan Ruang Chat" aria-live="polite"><div class="welcome" id="assistantWelcome"><p class="welcome-kicker">Tempat untuk mengembangkan pikiran.</p><h2>Apa yang ingin<br>Anda bahas?</h2><p>Diskusikan ide, susun tulisan, pelajari sesuatu, atau minta bantuan kode. Percakapan menggunakan CommandCode.</p><p class="empty-note">Percakapan tersimpan pada akun workspace Anda. Chat ini belum mendukung pencarian web atau lampiran file.</p></div></div>
           <p class="empty-note" id="assistantContext" hidden>Konteks jawaban dibatasi pada bagian terbaru percakapan. Sebutkan kembali detail lama yang masih diperlukan.</p>
           <p class="workspace-error" id="assistantError" role="alert" hidden></p>
-          <form class="composer" id="assistantForm"><div class="composer-heading"><label for="assistantInput">Pesan Anda</label></div><textarea id="assistantInput" rows="3" maxlength="12000" placeholder="Tulis pesan Anda..." required></textarea><div class="composer-actions"><div class="model-controls"><label for="assistantModel">Model</label><select id="assistantModel" aria-describedby="assistantModelStatus" disabled><option value="">Default server</option></select><button class="composer-icon" id="assistantModelsRefresh" type="button" aria-label="Muat ulang model Ruang Chat" title="Muat ulang model">Muat ulang</button></div><button class="send-button" id="assistantSend" type="submit">Kirim</button></div><p class="model-status" id="assistantModelStatus" role="status"></p><p class="composer-hint" id="assistantSendStatus" role="status">Enter untuk mengirim · Shift + Enter untuk baris baru</p></form>
+          <form class="composer" id="assistantForm">
+            <div class="composer-heading"><span id="assistantInputLabel">Pesan Anda</span></div>
+            <div id="assistantInput" class="chat-editor" contenteditable="true" role="textbox" aria-multiline="true" aria-labelledby="assistantInputLabel" aria-describedby="assistantEditorHint" data-placeholder="Tulis pesan Anda..."></div>
+            <div class="composer-actions"><div class="model-controls"><label for="assistantModel">Model</label><select id="assistantModel" aria-describedby="assistantModelStatus" disabled><option value="">Default server</option></select><button class="composer-icon" id="assistantModelsRefresh" type="button" aria-label="Muat ulang model Ruang Chat" title="Muat ulang model"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5M6.1 7a7 7 0 0 1 11.6-2L20 8M4 16l2.3 3A7 7 0 0 0 17.9 17"/></svg></button></div><button class="send-button" id="assistantSend" type="submit">Kirim</button></div>
+            <p class="model-status" id="assistantModelStatus" role="status"></p>
+            <p class="composer-hint" id="assistantEditorHint">Enter kirim · Shift + Enter baris baru · Dalam daftar, Enter lanjut · Ctrl + Enter kirim</p>
+            <p class="composer-hint" id="assistantSendStatus" role="status"></p>
+          </form>
         </div>
       </section>
 
@@ -401,11 +416,13 @@
     </main>
   </div>
   <div class="toast" id="toast" role="status"></div>
-  <script src="/static/app.js?v=16"></script>
+  <script src="/static/app.js?v=17"></script>
   <script src="/static/workspace.js?v=8"></script>
   <script src="/static/vendor/markdown-it-15.0.3.min.js"></script>
   <script src="/static/markdown.js?v=1"></script>
-  <script src="/static/assistant.js?v=4"></script>
+  <script src="/static/chat-editor.js?v=1"></script>
+  <script src="/static/assistant.js?v=5"></script>
+  <script src="/static/rag-history.js?v=1"></script>
   <script src="/static/account.js?v=1"></script>
   <script src="/static/folder-upload.js?v=1"></script>
   <script src="/static/whatsapp.js?v=1"></script>

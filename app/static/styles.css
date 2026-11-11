@@ -256,7 +256,7 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
   #folderProgress::-moz-progress-bar { transition: width .2s linear; }
 }
 .assistant-history { margin-bottom: 24px; }
-.assistant-wrap > .assistant-history, .assistant-wrap > .workspace-error, .assistant-wrap > #assistantContext { width: min(100%, 960px); }
+.chat-wrap > .assistant-history, .assistant-wrap > .workspace-error, .assistant-wrap > #assistantContext { width: min(100%, 960px); }
 .assistant-history-popup { width: min(520px, calc(100% - 32px)); max-height: calc(100dvh - 48px); padding: 0; border: 1px solid var(--control-line); border-radius: 24px; color: var(--ink); background: var(--surface); box-shadow: 0 24px 72px #10245340; }
 .assistant-history-popup[open] { display: flex; flex-direction: column; }
 .assistant-history-popup::backdrop { background: #082d4266; }
@@ -298,8 +298,21 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
 .markdown-code pre { max-width: 100%; margin: 0; padding: 16px; overflow-x: auto; white-space: pre; overflow-wrap: normal; color: var(--ink); line-height: 1.6; tab-size: 2; }
 .assistant-wrap .workspace-error { margin-block: 16px; }
 .assistant-wrap #assistantContext { margin-block: 16px; }
-#assistantModelsRefresh { width: auto; flex-basis: auto; padding-inline: 10px; }
-#assistantForm textarea { min-height: 100px; max-height: 320px; resize: vertical; }
+#assistantForm { padding: 12px 16px; gap: 4px; border-radius: 20px; }
+#assistantForm .composer-heading { color: var(--muted); font-size: 12px; font-weight: 600; }
+#assistantForm .composer-actions { border: 0; padding-top: 4px; gap: 8px; }
+#assistantForm .model-controls { flex: 1 1 160px; max-width: 300px; }
+#assistantForm .model-controls select { min-width: 0; background: transparent; border-color: transparent; }
+#assistantForm .model-status { font-size: 11px; }
+#assistantForm .composer-hint:empty { display: none; }
+.chat-editor { width: 100%; min-height: 44px; max-height: min(36dvh, 280px); padding: 8px 0; overflow-y: auto; overflow-wrap: anywhere; white-space: pre-wrap; color: var(--ink); font-size: 16px; line-height: 1.65; border-radius: 4px; }
+.chat-editor:empty::before { content: attr(data-placeholder); color: var(--muted); pointer-events: none; }
+.chat-editor:focus-visible { outline: 2px solid var(--control-line); outline-offset: 2px; }
+.chat-editor[aria-disabled="true"] { opacity: .65; }
+.chat-editor p, .chat-editor div { margin: 0; }
+.chat-editor ol, .chat-editor ul { margin: 0; padding-left: 28px; }
+.chat-editor h1, .chat-editor h2, .chat-editor h3, .chat-editor h4, .chat-editor h5, .chat-editor h6 { margin: 4px 0; font-size: 1.1em; line-height: 1.5; }
+.chat-editor blockquote { margin: 4px 0; padding-left: 16px; border-left: 2px solid var(--control-line); }
 .workspace-tabs { display: flex; flex-wrap: wrap; gap: 24px; border-bottom: 1px solid var(--line); margin-bottom: 28px; }
 .workspace-tabs button { position: relative; padding: 12px 0 16px; min-height: 48px; color: var(--muted); background: transparent; font-size: 14px; font-weight: 600; }
 .workspace-tabs button:hover, .workspace-tabs button.active { color: var(--accent); }
@@ -390,6 +403,7 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
 .model-controls { display: flex; align-items: center; gap: 4px; flex: 0 1 380px; min-width: 0; }
 .model-controls label { color: var(--muted); font-size: 12px; margin-right: 4px; }
 .model-controls select { flex: 1; width: 0; min-width: 90px; padding: 8px 24px 8px 10px; text-overflow: ellipsis; color: var(--ink); background: var(--input); border: 1px solid var(--line); border-radius: 10px; font-size: 13px; }
+.model-controls option { color: var(--ink); background-color: var(--input); }
 .composer-icon { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; flex: 0 0 44px; padding: 10px; border-radius: 10px; color: var(--muted); background: transparent; }
 .composer-icon:hover { color: var(--accent); background: var(--hover); }
 .composer-icon[aria-busy="true"] svg { opacity: .45; }

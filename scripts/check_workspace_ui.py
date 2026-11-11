@@ -42,7 +42,7 @@ def main():
     output = Path(args.output)
     output.mkdir(parents=True, exist_ok=True)
     log, errors, contrast_results = [], [], []
-    state = {"profile": {}, "posts": {}, "campaigns": {}, "audits": [], "publishes": 0, "conversations": {}}
+    state = {"profile": {}, "posts": {}, "campaigns": {}, "audits": [], "publishes": 0, "conversations": {}, "rag_conversations": {}}
     state['account'] = {'username':'admin','tenant':'local','role':'admin','display_name':'admin','email':'','bio':'',
                         'enabled_features':['assistant','chat','seo','social'], 'available_features':['assistant','chat','seo','social'], 'editable':True,'revision':0}
     state.update(folder_requests=[], folder_attempts={}, folder_hold=False, folder_allow_broken=False, folder_formats_error=False)
@@ -170,9 +170,25 @@ Penjelasan dari fixture.
                 response = {"message": "Percakapan dihapus."}
             else:
                 response = state["conversations"][chat_id]
-        elif path == "/api/chat-rag":
+        elif path == '/api/rag-history/conversations':
+            response = list(state['rag_conversations'].values())
+        elif path.startswith('/api/rag-history/conversations/'):
+            chat_id = path.rsplit('/', 1)[-1]
+            if request.method == 'DELETE':
+                del state['rag_conversations'][chat_id]
+                response = {'message':'Percakapan RAG dihapus.'}
+            else:
+                response = state['rag_conversations'][chat_id]
+        elif path in {"/api/chat-rag", '/api/rag-history/messages'}:
             assert data.get("model") == "model-lain", data
             response = {"answer": "Jawaban dari dokumen uji.", "status": "answered", "sources": [{"source_name": "Dokumen uji", "text": "Bukti pengujian antarmuka."}]}
+            if path == '/api/rag-history/messages':
+                chat_id = data.get('conversation_id') or f'{len(state["rag_conversations"]) + 100:032x}'
+                previous = state['rag_conversations'].get(chat_id, {})
+                record = {'id':chat_id,'revision':previous.get('revision',0) + 1,'title':previous.get('title',data['question']), 'model':data.get('model'), 'top_k':data['top_k'], 'updated_at':'2026-11-11T05:00:00Z',
+                          'messages':previous.get('messages',[]) + [{'role':'user','content':data['question']},{'role':'assistant','content':response['answer'],'sources':response['sources'],'status':'answered'}]}
+                state['rag_conversations'][chat_id] = record
+                response['conversation'] = {'id':chat_id,'revision':record['revision']}
         elif path == "/api/knowledge/search":
             response = {"results": [{"source_name": "Dokumen uji", "text": "Hasil pencarian fixture.", "score": .73}]}
         elif path in {"/api/knowledge", "/api/documents/upload"}:
@@ -418,6 +434,39 @@ Penjelasan dari fixture.
         expect(page.locator("#assistantModel")).to_be_enabled()
         expect(page.locator("#assistantModelStatus")).to_contain_text("Filter paket CommandCode GOAT")
         page.locator("#assistantModel").select_option("model-lain")
+        editor = page.locator('#assistantInput')
+        def clear_editor():
+            editor.evaluate('el => el.replaceChildren()')
+            editor.fill('')
+        clear_editor()
+        editor.press_sequentially('1. Pertama')
+        expect(editor.locator('ol li')).to_have_text('Pertama')
+        editor.press('Enter')
+        editor.press_sequentially('Kedua')
+        expect(editor.locator('ol li')).to_have_text(['Pertama', 'Kedua'])
+        editor.press('Enter')
+        editor.press('Enter')
+        expect(editor.locator('ol li')).to_have_count(2)
+        clear_editor()
+        editor.press_sequentially('2.Tanpa spasi')
+        expect(editor.locator('ol')).to_have_attribute('start', '2')
+        expect(editor.locator('li')).to_have_text('Tanpa spasi')
+        clear_editor()
+        editor.press_sequentially('- Poin')
+        expect(editor.locator('ul li')).to_have_text('Poin')
+        clear_editor()
+        editor.press_sequentially('## Judul')
+        expect(editor.locator('h2')).to_have_text('Judul')
+        clear_editor()
+        editor.press_sequentially('**tebal** biasa')
+        expect(editor.locator('strong')).to_have_text('tebal')
+        clear_editor()
+        editor.fill('1. Pertama\n2. Kedua')
+        editor.press('Control+Enter')
+        expect(page.locator('#assistantMessages .user ol li')).to_have_text(['Pertama', 'Kedua'])
+        page.locator('#assistantNew').click()
+        state['conversations'].clear()
+        log.append('Compact editor: numbered/bullet input rules, no-space numbered marker, list continuation/exit, heading, bold, Markdown serialization, Ctrl+Enter send and formatted user message')
         page.locator("#assistantInput").fill("Bantu saya belajar Python")
         page.locator("#assistantInput").press("Shift+Enter")
         page.locator("#assistantInput").press("Enter")
@@ -519,7 +568,7 @@ Penjelasan dari fixture.
         page.locator("#assistantInput").fill("Pesan tetap tersimpan saat gagal")
         page.locator("#assistantSend").click()
         expect(page.locator("#assistantError")).to_contain_text("Provider uji sibuk")
-        expect(page.locator("#assistantInput")).to_have_value("Pesan tetap tersimpan saat gagal")
+        expect(page.locator("#assistantInput")).to_have_text("Pesan tetap tersimpan saat gagal")
         expect(page.locator("#assistantMessages .message")).to_have_count(4)
         page.unroute("**/api/assistant/messages")
         page.once("dialog", lambda dialog: dialog.accept())
@@ -819,6 +868,51 @@ Penjelasan dari fixture.
         page.locator("#newChatButton").click()
         page.locator(".brand").click()
         log.append("RAG: all suggestions, source-count select, send, evidence disclosure, new conversation, wordmark navigation")
+        saved_rag = next(record for record in state['rag_conversations'].values() if record['title'] == 'Pertanyaan uji')
+        page.reload()
+        expect(page.locator('#ragHistoryOpen')).to_be_visible()
+        expect(page.locator('#llmModel')).to_be_enabled()
+        page.locator('#ragHistoryOpen').click()
+        expect(page.locator('#ragHistoryPrivacy')).to_contain_text('hanya dapat diakses oleh akun Anda')
+        page.locator(f'#ragHistoryList button[data-id="{saved_rag["id"]}"]').click()
+        expect(page.locator('#messages .message')).to_have_count(2)
+        expect(page.locator('#llmModel')).to_have_value('model-lain')
+        expect(page.locator('#topK')).to_have_value('3')
+        page.locator('#messages .source-toggle').click()
+        expect(page.locator('#messages .source-list')).to_contain_text('Bukti pengujian antarmuka.')
+        page.locator('#questionInput').fill('Pertanyaan lanjutan yang berdiri sendiri')
+        page.locator('#sendButton').click()
+        expect(page.locator('#messages .message')).to_have_count(4)
+        assert state['rag_conversations'][saved_rag['id']]['revision'] == 2
+        for width in (360,1440):
+            page.set_viewport_size({'width':width,'height':1000})
+            for theme in ('light','dark'):
+                page.locator('html').evaluate('(el, theme) => el.dataset.theme=theme',theme)
+                page.locator('#ragHistoryOpen').press('Enter')
+                expect(page.locator('#ragHistoryPopup')).to_be_visible()
+                check_layout(f'rag-history-{width}-{theme}')
+                page.screenshot(path=str(output / f'rag-history-{width}-{theme}.png'))
+                page.keyboard.press('Escape')
+                expect(page.locator('#ragHistoryOpen')).to_be_focused()
+        page.locator('#ragHistoryOpen').click()
+        page.once('dialog',lambda dialog:dialog.accept())
+        page.locator('#ragHistoryDelete').click()
+        expect(page.locator(f'#ragHistoryList button[data-id="{saved_rag["id"]}"]')).to_have_count(0)
+        expect(page.locator('#welcomeState')).to_be_visible()
+        page.locator('#ragHistoryClose').click()
+        pending_rag = []
+        page.route('**/api/rag-history/messages',lambda route:pending_rag.append(route))
+        page.locator('#questionInput').fill('Pesan akun lama')
+        page.locator('#sendButton').click()
+        page.wait_for_timeout(100)
+        assert len(pending_rag) == 1
+        page.evaluate("document.dispatchEvent(new Event('workspace-identity-changed'))")
+        pending_rag[0].fulfill(json={'answer':'Jawaban akun lama tidak boleh tampil','status':'answered','sources':[],'conversation':{'id':'f'*32,'revision':1}})
+        page.wait_for_timeout(100)
+        expect(page.locator('#messages .message')).to_have_count(0)
+        expect(page.locator('#sendButton')).to_be_enabled()
+        page.unroute('**/api/rag-history/messages')
+        log.append('Private RAG history: reload, restored answers/sources/model/top-k, continue with revision, dialog mobile/desktop themes, delete, and stale reply discarded on identity change')
         page.route("**/api/llm/models", lambda route: route.fulfill(status=503, json={"detail": "Katalog model tidak tersedia"}))
         page.locator("#refreshModels").click()
         expect(page.locator("#modelStatus")).to_contain_text("Menggunakan model default server")
