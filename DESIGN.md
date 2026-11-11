@@ -1,5 +1,13 @@
 # Workspace design direction
 
+Folder ingestion retains ENERGY 2 / RHYTHM 2 / MOTION 1 and the studio theme.
+Put one full-width folder panel before the existing single-file and note forms,
+since folder selection is the new bulk workflow. A native progress bar and explicit
+percent count completed file responses, while a status line separates byte transfer
+from indexing. A bounded, keyboard-scrollable list shows relative paths, formats
+and per-file results. Existing theme tokens and controls carry pause/retry states.
+Only measured progress animates briefly, respecting reduced motion. No new assets.
+
 Personal profile retains the studio direction, ENERGY 2 / RHYTHM 2 / MOTION 1.
 Place Profil Saya beside account utilities at the sidebar bottom so it remains
 reachable when all four main features are hidden. A single reading-width column

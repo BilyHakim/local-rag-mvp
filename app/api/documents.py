@@ -3,8 +3,9 @@ import hashlib
 import zipfile
 from pathlib import Path
 from uuid import uuid4
+from typing import Annotated
 
-from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from app.core.config import settings
 from app.core.security import tenant_context
 from app.schemas.documents import DocumentUploadResponse
@@ -17,6 +18,22 @@ from app.services.qdrant_service import qdrant_service
 
 router = APIRouter()
 SUPPORTED_EXTENSIONS = {".pdf", ".docx", ".xlsx", ".xls", ".csv"}
+
+
+@router.get("/documents/formats")
+async def document_formats():
+    return {"extensions": sorted(SUPPORTED_EXTENSIONS), "max_upload_bytes": settings.MAX_UPLOAD_BYTES}
+
+
+def source_filename(filename, relative_path):
+    name = Path((filename or "").replace("\\", "/")).name
+    if relative_path is None:
+        return name
+    normalized = relative_path.replace("\\", "/")
+    parts = normalized.split("/")
+    if len(parts) < 2 or any(part in {"", ".", ".."} or ":" in part or any(ord(char) < 32 for char in part) for part in parts) or parts[-1] != name:
+        raise HTTPException(400, "Path folder harus relatif dan sesuai nama file.")
+    return normalized
 
 
 def _extract_document_pages(saved_path: Path, extension: str) -> list[dict]:
@@ -38,10 +55,15 @@ def _extract_document_pages(saved_path: Path, extension: str) -> list[dict]:
 
 
 @router.post("/documents/upload", response_model=DocumentUploadResponse)
-async def upload_document(file: UploadFile = File(...)):
-    filename = Path((file.filename or "").replace("\\", "/")).name
+async def upload_document(file: UploadFile = File(...), relative_path: Annotated[str | None, Form(max_length=1024)] = None):
+    try:
+        filename = source_filename(file.filename, relative_path)
+    except HTTPException:
+        await file.close()
+        raise
     extension = Path(filename).suffix.lower()
     if extension not in SUPPORTED_EXTENSIONS:
+        await file.close()
         raise HTTPException(400, "Format dokumen tidak didukung")
     directory = Path(settings.STORAGE_DIR) / "documents" / tenant_context.get()
     directory.mkdir(parents=True, exist_ok=True)
@@ -58,7 +80,10 @@ async def upload_document(file: UploadFile = File(...)):
                 digest.update(block)
                 target.write(block)
         content_hash = digest.hexdigest()
-        existing = await asyncio.to_thread(qdrant_service.get_sample_by_content_hash, content_hash)
+        if relative_path is not None:
+            existing = await asyncio.to_thread(qdrant_service.get_sample_by_content_hash, content_hash, filename)
+        else:
+            existing = await asyncio.to_thread(qdrant_service.get_sample_by_content_hash, content_hash)
         if existing and existing.get("filename") == filename:
             return DocumentUploadResponse(filename=filename, saved_path="", total_pages=0,
                 total_chunks=0, indexed_chunks=0, content_hash=content_hash, skipped_duplicate=True,

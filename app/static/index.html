@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="Workspace untuk knowledge perusahaan, audit SEO, dan produksi konten social media.">
   <title>Company AI Workspace</title>
-  <link rel="stylesheet" href="/static/styles.css?v=20">
+  <link rel="stylesheet" href="/static/styles.css?v=21">
 </head>
 <body>
   <a class="skip-link" href="#mainContent">Langsung ke area kerja</a>
@@ -161,6 +161,19 @@
           <div class="section-intro">
             <div><h2>Tambahkan pengetahuan</h2><p>Unggah dokumen atau masukkan catatan agar dapat digunakan sebagai konteks jawaban.</p></div>
           </div>
+
+          <form class="panel workspace-form folder-upload" id="folderUploadForm">
+            <div><h3>Unggah folder knowledge</h3><p class="empty-note">Kumpulkan dokumen dalam satu folder, lalu pilih folder tersebut. File di dalam subfolder ikut dipindai.</p></div>
+            <label class="field"><span>Pilih folder dari perangkat</span><input id="folderInput" type="file" webkitdirectory multiple aria-describedby="folderHelp" required disabled></label>
+            <p class="empty-note" id="folderHelp">Memuat format file dan batas ukuran dari server...</p>
+            <button class="workspace-button" id="folderFormatsRetry" type="button" hidden>Muat ulang format</button>
+            <p class="empty-note" id="folderScan" role="status">Pilih folder untuk melihat daftar file sebelum mengunggah.</p>
+            <div class="workspace-actions"><button class="primary-button" id="folderStart" type="submit" disabled>Unggah &amp; indeks folder</button><button class="workspace-button" id="folderPause" type="button" disabled>Jeda setelah file ini</button><button class="workspace-button" id="folderRetry" type="button" hidden>Ulangi file gagal</button></div>
+            <div id="folderProgressArea" hidden><div class="workspace-row"><label for="folderProgress">Progres pemrosesan</label><strong id="folderPercent">0%</strong></div><progress id="folderProgress" value="0" max="100" aria-describedby="folderCurrent">0%</progress><p class="empty-note" id="folderCurrent" role="status">Belum ada file yang diproses.</p></div>
+            <p class="inline-result" id="folderResult" role="status" hidden></p>
+            <details id="folderDetails" hidden><summary>Daftar file dan hasil pemrosesan</summary><ul id="folderFileList" class="folder-file-list" tabindex="0" aria-label="Daftar file folder"></ul></details>
+            <p class="empty-note">File diproses satu per satu. Progres 100% berarti semua file yang memenuhi syarat sudah diproses; periksa hasil bila ada yang gagal. Biarkan halaman terbuka hingga selesai. Pemilihan folder tidak menjalankan pemantauan otomatis saat file lokal berubah.</p>
+          </form>
 
           <div class="source-grid">
             <form class="panel upload-panel" id="uploadForm">
@@ -331,11 +344,12 @@
     </main>
   </div>
   <div class="toast" id="toast" role="status"></div>
-  <script src="/static/app.js?v=13"></script>
+  <script src="/static/app.js?v=14"></script>
   <script src="/static/workspace.js?v=8"></script>
   <script src="/static/vendor/markdown-it-15.0.3.min.js"></script>
   <script src="/static/markdown.js?v=1"></script>
   <script src="/static/assistant.js?v=3"></script>
   <script src="/static/account.js?v=1"></script>
+  <script src="/static/folder-upload.js?v=1"></script>
 </body>
 </html>

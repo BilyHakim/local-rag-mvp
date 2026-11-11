@@ -197,6 +197,22 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
 .account-feature strong, .account-feature small { display: block; }
 .account-feature small { color: var(--muted); font-size: 13px; }
 .account-feature:has(input:disabled) { cursor: not-allowed; }
+.folder-upload { min-width: 0; overflow-wrap: anywhere; }
+.folder-upload h3 { margin-bottom: 10px; }
+.folder-upload input[type=file] { width: 100%; }
+#folderProgress { width: 100%; height: 14px; margin-block: 12px; appearance: none; border: 0; border-radius: 4px; overflow: hidden; background: var(--soft); accent-color: var(--accent); }
+#folderProgress::-webkit-progress-bar { background: var(--soft); }
+#folderProgress::-webkit-progress-value { background: var(--accent); }
+#folderProgress::-moz-progress-bar { background: var(--accent); }
+.folder-file-list { max-height: 360px; overflow: auto; padding: 0; margin: 0; list-style: none; }
+.folder-file-list li { padding-block: 12px; border-top: 1px solid var(--line); overflow-wrap: anywhere; }
+.folder-file-list strong, .folder-file-list small { display: block; }
+.folder-file-list small { color: var(--muted); }
+.folder-file-list .folder-file-error { color: var(--error); }
+@media (prefers-reduced-motion: no-preference) {
+  #folderProgress::-webkit-progress-value { transition: width .2s linear; }
+  #folderProgress::-moz-progress-bar { transition: width .2s linear; }
+}
 .assistant-history { border-bottom: 1px solid var(--line); margin-bottom: 24px; }
 .assistant-wrap > .assistant-history, .assistant-wrap > .workspace-error, .assistant-wrap > #assistantContext { width: min(100%, 960px); }
 .assistant-history-controls { display: flex; align-items: end; flex-wrap: wrap; gap: 12px; margin-bottom: 16px; }

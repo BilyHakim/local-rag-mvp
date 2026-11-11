@@ -82,7 +82,7 @@ class QdrantService:
         )
         return self._scroll_one_by_filter(payload_filter) is not None
 
-    def get_sample_by_content_hash(self, content_hash: str) -> dict | None:
+    def get_sample_by_content_hash(self, content_hash: str, filename: str | None = None) -> dict | None:
         payload_filter = Filter(
             must=[
                 FieldCondition(
@@ -91,6 +91,8 @@ class QdrantService:
                 )
             ]
         )
+        if filename is not None:
+            payload_filter.must.append(FieldCondition(key="filename", match=MatchValue(value=filename)))
         return self._scroll_one_by_filter(payload_filter)
 
     def delete_by_filename(self, filename: str) -> None:

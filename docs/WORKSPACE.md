@@ -1,5 +1,9 @@
 # Company AI Workspace
 
+Knowledge Base mendukung unggah folder beserta subfolder, deteksi format,
+progres pemrosesan 0–100%, jeda/lanjutkan dan pengulangan file gagal. Panduan:
+[Unggah folder knowledge](FOLDER_KNOWLEDGE.md).
+
 Satu aplikasi dengan tiga mode: Knowledge / RAG, SEO Specialist, dan Social Media
 Specialist. Jalankan FastAPI seperti sebelumnya, lalu buka UI pada port aplikasi.
 Fitur specialist dan profil perusahaan memerlukan role admin; reader tetap hanya

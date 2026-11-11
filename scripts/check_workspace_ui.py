@@ -2,6 +2,7 @@
 import argparse
 import io
 import json
+import re
 from copy import deepcopy
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
@@ -44,6 +45,16 @@ def main():
     state = {"profile": {}, "posts": {}, "campaigns": {}, "audits": [], "publishes": 0, "conversations": {}}
     state['account'] = {'username':'admin','tenant':'local','role':'admin','display_name':'admin','email':'','bio':'',
                         'enabled_features':['assistant','chat','seo','social'], 'available_features':['assistant','chat','seo','social'], 'editable':True,'revision':0}
+    state.update(folder_requests=[], folder_attempts={}, folder_hold=False, folder_allow_broken=False, folder_formats_error=False)
+    folder_fixture = output.resolve() / 'KnowledgeFixture'
+    (folder_fixture / 'subfolder').mkdir(parents=True, exist_ok=True)
+    for name in ('report.CSV', 'subfolder/report.CSV', 'duplicate.csv', 'rate.csv'):
+        (folder_fixture / name).write_bytes(b'name,value\nfixture,247')
+    (folder_fixture / 'broken.pdf').write_bytes(b'%PDF-fixture, not a real document')
+    (folder_fixture / 'skip.txt').write_text('Unsupported fixture', encoding='utf-8')
+    (folder_fixture / 'empty.csv').write_bytes(b'')
+    with (folder_fixture / 'big.csv').open('wb') as large:
+        large.truncate(25 * 1024 * 1024 + 1)
     buffer = io.BytesIO()
     Image.new("RGB", (1024, 1024), "#0F42C0").save(buffer, "JPEG")
     markdown_answer = """# Jawaban uji
@@ -112,6 +123,28 @@ Penjelasan dari fixture.
             response = {"status": "ok", "env": "local"}
         elif path == "/api/llm/models":
             response = {"provider": "api", "default_model": "default-uji", "models": ["model-uji", "model-lain"], "plan": "goat"}
+        elif path == '/api/documents/formats':
+            if state['folder_formats_error']:
+                route.fulfill(status=503, json={'detail':'Format uji belum tersedia'})
+                return
+            response = {'extensions':['.pdf','.docx','.xlsx','.xls','.csv'], 'max_upload_bytes':25*1024*1024}
+        elif path == '/api/documents/upload' and b'name="relative_path"' in (request.post_data_buffer or b''):
+            assert request.headers.get('x-requested-with') == 'workspace'
+            relative = re.search(rb'name="relative_path"\r\n\r\n([^\r\n]+)', request.post_data_buffer).group(1).decode()
+            state['folder_requests'].append(relative)
+            state['folder_attempts'][relative] = state['folder_attempts'].get(relative,0) + 1
+            if state['folder_hold']:
+                state['folder_hold'] = False
+                state['folder_held_route'] = route
+                return
+            if relative.endswith('broken.pdf') and not state['folder_allow_broken']:
+                route.fulfill(status=422, json={'detail':'File PDF uji rusak'})
+                return
+            if relative.endswith('rate.csv') and state['folder_attempts'][relative] == 1:
+                route.fulfill(status=429, headers={'Retry-After':'1'}, json={'detail':'Batas request uji'})
+                return
+            duplicate = relative.endswith('duplicate.csv')
+            response = {'filename':relative,'total_pages':0 if duplicate else 1,'indexed_chunks':0 if duplicate else 1,'skipped_duplicate':duplicate}
         elif path.endswith("/workspace/status"):
             response = {"text_provider": "ollama", "text_model": "model-uji", "image_configured": True,
                         "instagram_configured": True, "public_media_configured": True,
@@ -651,6 +684,68 @@ Penjelasan dari fixture.
         page.locator("#searchForm button").click()
         expect(page.locator("#searchResults")).to_contain_text("Hasil pencarian fixture")
         log.append("Knowledge: select/upload CSV, save note, search displays fixture evidence")
+        expect(page.locator('#folderInput')).to_be_enabled()
+        page.locator('#folderInput').set_input_files(str(folder_fixture))
+        expect(page.locator('#folderScan')).to_contain_text('8 file ditemukan: 5 siap diproses, 3 dilewati')
+        expect(page.locator('#folderProgress')).to_have_attribute('value','0')
+        state['folder_hold'] = True
+        page.locator('#folderStart').click()
+        page.wait_for_function("document.querySelector('#folderUploadForm').getAttribute('aria-busy') === 'true'")
+        expect(page.locator('#folderInput')).to_be_disabled()
+        expect(page.locator('#fileInput')).to_be_disabled()
+        expect(page.locator('#folderProgress')).to_have_attribute('value','0')
+        page.locator('#folderPause').click()
+        held_path = state['folder_requests'][-1]
+        if held_path.endswith('broken.pdf'):
+            state['folder_held_route'].fulfill(status=422, json={'detail':'File PDF uji rusak'})
+        elif held_path.endswith('rate.csv'):
+            state['folder_held_route'].fulfill(status=429, headers={'Retry-After':'1'}, json={'detail':'Batas request uji'})
+        else:
+            duplicate = held_path.endswith('duplicate.csv')
+            state['folder_held_route'].fulfill(status=200, json={'indexed_chunks':0 if duplicate else 1,'total_pages':1,'skipped_duplicate':duplicate})
+        expect(page.locator('#folderResult')).to_contain_text('Proses dijeda')
+        expect(page.locator('#folderStart')).to_have_text('Lanjutkan folder')
+        assert int(page.locator('#folderProgress').get_attribute('value')) < 100
+        if held_path.endswith('broken.pdf'):
+            before_retry = len(state['folder_requests'])
+            page.locator('#folderRetry').click()
+            expect(page.locator('#folderResult')).to_contain_text('1 gagal')
+            expect(page.locator('#folderStart')).to_be_enabled()
+            assert len(state['folder_requests']) == before_retry + 1
+        page.locator('#folderStart').click()
+        expect(page.locator('#folderProgress')).to_have_attribute('value','100', timeout=20000)
+        expect(page.locator('#folderResult')).to_contain_text('1 gagal')
+        expect(page.locator('#folderResult')).to_contain_text('1 duplikat')
+        expect(page.locator('#folderResult')).to_contain_text('3 dilewati')
+        assert 'KnowledgeFixture/report.CSV' in state['folder_requests']
+        assert 'KnowledgeFixture/subfolder/report.CSV' in state['folder_requests']
+        assert state['folder_attempts']['KnowledgeFixture/rate.csv'] == 2
+        assert not any(path.endswith(('empty.csv','big.csv','skip.txt')) for path in state['folder_requests'])
+        state['folder_allow_broken'] = True
+        page.locator('#folderRetry').click()
+        expect(page.locator('#folderResult')).to_contain_text('0 gagal')
+        expect(page.locator('#folderProgress')).to_have_attribute('value','100')
+        expect(page.locator('#folderRetry')).to_be_hidden()
+        page.locator('#folderDetails summary').click()
+        for width in (360,768,1024,1440):
+            page.set_viewport_size({'width':width,'height':1000})
+            for theme in ('light','dark'):
+                page.locator('html').evaluate('(el, theme) => el.dataset.theme = theme',theme)
+                check_layout(f'folder-complete-{width}-{theme}')
+                if width == 360 and theme == 'light':
+                    saved_status = page.locator('#folderCurrent').text_content()
+                    page.locator('#folderCurrent').evaluate("el => el.textContent = 'Mengindeks KnowledgeFixture/' + 'x'.repeat(200) + '.csv'")
+                    check_layout('folder-long-path-mobile')
+                    page.locator('#folderCurrent').evaluate('(el, text) => el.textContent = text', saved_status)
+                page.screenshot(path=str(output / f'folder-{width}-{theme}.png'), full_page=True)
+        state['folder_formats_error'] = True
+        page.reload()
+        expect(page.locator('#folderHelp')).to_contain_text('Format uji belum tersedia')
+        expect(page.locator('#folderInput')).to_be_disabled()
+        state['folder_formats_error'] = False
+        page.locator('#folderFormatsRetry').click()
+        expect(page.locator('#folderInput')).to_be_enabled()
+        log.append('Folder knowledge: real nested directory selection, uppercase extension, oversize/empty/unsupported skip, truthful 0-100 indexing progress, pause/resume, per-file failure/retry, duplicate result, automatic 429 backoff, formats retry, both themes and four widths')
 
         nav("chat")
         page.locator("#questionInput").fill("Teks tetap tersimpan saat ukuran diubah")
@@ -699,8 +794,8 @@ Penjelasan dari fixture.
         page.locator("#generateSocial").click()
         expect(page.locator("#workspaceFeedback")).to_contain_text("Provider uji tidak tersedia")
         log.append("Error state: provider failure is visible; disabled editor prevents publishing empty drafts")
-        # Fixture provider 503 and password 409 responses are expected network errors.
-        unexpected = [error for error in errors if "503" not in error and "409" not in error]
+        # Fixture failure and throttling responses exercise visible recovery states.
+        unexpected = [error for error in errors if not any(code in error for code in ('503','409','422','429'))]
         assert not unexpected, unexpected
         report = {"result": "PASS", "fixture_apis": True, "external_requests_blocked": True,
                   "click_through": log, "contrast": contrast_results, "unexpected_console_errors": unexpected}

@@ -1,7 +1,7 @@
 const qs = (selector, root = document) => root.querySelector(selector);
 const qsa = (selector, root = document) => [...root.querySelectorAll(selector)];
 
-const state = { busy: false, account: null, accountError: '' };
+const state = { busy: false, account: null, accountError: '', knowledgeUploadBusy: false };
 const accountFeatures = ['assistant', 'chat', 'seo', 'social'];
 const featureEnabled = view => !accountFeatures.includes(view) || !state.account || state.account.enabled_features.includes(view);
 
@@ -278,14 +278,20 @@ qs('#newChatButton').addEventListener('click', () => {
 
 const fileInput = qs('#fileInput');
 const dropzone = qs('#dropzone');
+function refreshDocumentUpload() {
+  fileInput.disabled = state.knowledgeUploadBusy;
+  qs('#uploadButton').disabled = state.knowledgeUploadBusy || !fileInput.files.length;
+}
+document.addEventListener('knowledge-upload-state', refreshDocumentUpload);
 fileInput.addEventListener('change', () => {
   const file = fileInput.files[0];
   qs('#fileLabel').textContent = file ? file.name : 'Pilih file atau tarik ke sini';
-  qs('#uploadButton').disabled = !file;
+  refreshDocumentUpload();
 });
 ['dragenter', 'dragover'].forEach(name => dropzone.addEventListener(name, event => { event.preventDefault(); dropzone.classList.add('dragging'); }));
 ['dragleave', 'drop'].forEach(name => dropzone.addEventListener(name, event => { event.preventDefault(); dropzone.classList.remove('dragging'); }));
 dropzone.addEventListener('drop', event => {
+  if (state.knowledgeUploadBusy) return;
   if (!event.dataTransfer.files.length) return;
   fileInput.files = event.dataTransfer.files;
   fileInput.dispatchEvent(new Event('change'));
@@ -293,10 +299,12 @@ dropzone.addEventListener('drop', event => {
 
 qs('#uploadForm').addEventListener('submit', async event => {
   event.preventDefault();
+  if (state.knowledgeUploadBusy) return;
   const file = fileInput.files[0];
   if (!file) return;
   if (file.size > 25 * 1024 * 1024) return showResult(qs('#uploadResult'), 'Ukuran file melebihi 25 MB.', true);
   const button = qs('#uploadButton');
+  state.knowledgeUploadBusy = true; document.dispatchEvent(new Event('knowledge-upload-state'));
   button.disabled = true; button.textContent = 'Mengindeks dokumen...';
   const formData = new FormData(); formData.append('file', file);
   try {
@@ -305,7 +313,7 @@ qs('#uploadForm').addEventListener('submit', async event => {
     showResult(qs('#uploadResult'), detail);
     event.target.reset(); qs('#fileLabel').textContent = 'Pilih file atau tarik ke sini';
   } catch (error) { showResult(qs('#uploadResult'), error.message, true); }
-  finally { button.disabled = !fileInput.files.length; button.textContent = 'Unggah & indeks'; }
+  finally { state.knowledgeUploadBusy = false; document.dispatchEvent(new Event('knowledge-upload-state')); button.textContent = 'Unggah & indeks'; }
 });
 
 qs('#manualForm').addEventListener('submit', async event => {
