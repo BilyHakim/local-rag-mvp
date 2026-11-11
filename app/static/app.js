@@ -9,6 +9,8 @@ function applyAccountProfile(profile) {
   const previous = state.account;
   state.account = profile; state.accountError = '';
   qs('#accessStatus').textContent = profile.display_name || profile.username || 'API key';
+  qs('#accountInitials').textContent = (profile.display_name || profile.username || 'API').trim().split(/\s+/).slice(0, 2).map(word => word[0]).join('').toLocaleUpperCase();
+  qs('#workspaceTenant').textContent = profile.tenant || 'Workspace';
   qsa('.nav-item').forEach(item => { item.hidden = !featureEnabled(item.dataset.view); });
   const current = qs('.view.active')?.id.replace(/View$/, '');
   if (current && !featureEnabled(current)) switchView('account');
@@ -83,6 +85,16 @@ function switchView(name, focus = true, notify = true) {
 }
 
 qsa('.nav-item').forEach(item => item.addEventListener('click', () => switchView(item.dataset.view)));
+qs('#workspaceAccount').addEventListener('click', () => switchView('account'));
+qs('#workspaceSearchForm').addEventListener('submit', event => {
+  event.preventDefault();
+  const query = qs('#workspaceSearch').value.trim();
+  if (query.length < 2) return;
+  switchView('knowledge');
+  qs('#searchInput').value = query;
+  qs('#searchInput').focus();
+  qs('#searchForm').requestSubmit();
+});
 function updateSidebarButtons(hidden) {
   const direction = hidden ? 'M13 9l3 3-3 3' : 'M15 9l-3 3 3 3';
   const label = hidden ? 'Buka menu samping' : 'Tutup menu samping';

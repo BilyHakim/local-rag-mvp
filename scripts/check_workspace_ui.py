@@ -340,6 +340,26 @@ Penjelasan dari fixture.
             log.append(f"All seven views: {width}px, light/dark, no horizontal overflow, text contrast checked")
 
         page.set_viewport_size({"width": 1440, "height": 1000})
+        page.locator('#workspaceSearch').fill('Informasi garansi')
+        with page.expect_request(lambda request: urlsplit(request.url).path == '/api/knowledge/search' and request.method == 'POST') as search_request:
+            page.locator('#workspaceSearchForm button').click()
+        assert search_request.value.post_data_json['query'] == 'Informasi garansi'
+        expect(page.locator('#knowledgeView')).to_be_visible()
+        expect(page.locator('#searchInput')).to_have_value('Informasi garansi')
+        expect(page.locator('#searchResults')).to_contain_text('Hasil pencarian fixture.')
+        page.locator('#workspaceAccount').click()
+        expect(page.locator('#accountView')).to_be_visible()
+        expect(page.locator('#accountInitials')).to_have_text('A')
+        expect(page.locator('#workspaceTenant')).to_have_text('local')
+        page.locator('#workspaceSearch').fill('')
+        log.append('Reference header: knowledge search submits a real query; account avatar opens profile; workspace identity reflects account')
+        nav('social')
+        for theme in ('light', 'dark'):
+            if page.locator('html').get_attribute('data-theme') != theme:
+                page.locator('#themeToggle').click()
+            check_layout(f'reference-shell-{theme}')
+            page.evaluate('window.scrollTo(0, 0)')
+            page.screenshot(path=str(output / f'reference-shell-{theme}.png'))
         page.locator("#sidebarCollapse").click()
         expect(page.locator(".app-shell")).to_have_class("app-shell sidebar-hidden")
         page.locator("#sidebarCollapse").click()

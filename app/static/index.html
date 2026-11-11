@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="Workspace untuk knowledge perusahaan, audit SEO, dan produksi konten social media.">
   <title>Company AI Workspace</title>
-  <link rel="stylesheet" href="/static/styles.css?v=23">
+  <link rel="stylesheet" href="/static/styles.css?v=26">
 </head>
 <body>
   <a class="skip-link" href="#mainContent">Langsung ke area kerja</a>
@@ -19,6 +19,9 @@
         <span class="brand-short" aria-hidden="true">LR</span>
       </a>
       <p class="sidebar-caption">Riset &amp; produksi konten</p>
+
+      <div class="workspace-context"><span class="workspace-monogram" aria-hidden="true">LR</span><div><span>Workspace aktif</span><strong id="workspaceTenant">Memuat workspace...</strong></div></div>
+      <p class="nav-group-label">Area kerja</p>
 
       <nav class="nav" aria-label="Navigasi utama">
         <button class="nav-item" data-view="assistant" title="Ruang Chat" aria-label="Ruang Chat"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h16v12H9l-5 4V4Z"/><path d="M8 8h8M8 12h5"/></svg><span class="nav-label">Ruang Chat</span></button>
@@ -54,8 +57,12 @@
     <button class="sidebar-backdrop" id="sidebarBackdrop" type="button" tabindex="-1" aria-label="Tutup menu" hidden></button>
     <main class="main" id="mainContent" tabindex="-1">
       <div class="utility-bar">
-        <span class="utility-label">Company workspace</span>
-        <div class="workspace-actions"><span class="utility-label" id="accessStatus">Memeriksa sesi...</span><button class="workspace-button" type="button" id="logoutButton">Keluar</button></div>
+        <a class="utility-home" href="#chat">Local <strong>RAG</strong></a>
+        <form class="utility-search" id="workspaceSearchForm" role="search">
+          <label for="workspaceSearch">Cari knowledge</label>
+          <div class="utility-search-field"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10" cy="10" r="6"/><path d="m15 15 6 6"/></svg><input id="workspaceSearch" type="search" placeholder="Dokumen, produk, atau informasi..." minlength="2" maxlength="4000" required><button type="submit">Cari</button></div>
+        </form>
+        <div class="workspace-actions utility-account-actions"><button class="utility-account" type="button" id="workspaceAccount" aria-label="Buka profil saya"><span id="accessStatus">Memeriksa sesi...</span><span class="account-initials" id="accountInitials" aria-hidden="true">…</span></button><button class="workspace-button" type="button" id="logoutButton">Keluar</button></div>
       </div>
       <p class="workspace-feedback" id="workspaceFeedback" role="alert" hidden></p>
       <section class="view active" id="chatView">
@@ -388,7 +395,7 @@
     </main>
   </div>
   <div class="toast" id="toast" role="status"></div>
-  <script src="/static/app.js?v=15"></script>
+  <script src="/static/app.js?v=16"></script>
   <script src="/static/workspace.js?v=8"></script>
   <script src="/static/vendor/markdown-it-15.0.3.min.js"></script>
   <script src="/static/markdown.js?v=1"></script>

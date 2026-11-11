@@ -1,5 +1,20 @@
 # Workspace design direction
 
+Reference-led shell redesign: use the supplied Hubby screenshot's inset workspace,
+curved navigation join, roomy utility header and rounded section introduction.
+The user requests title banners match the navigation teal in both themes; white
+headings, pale blue context labels and sky-bordered controls preserve contrast.
+Retain the existing teal/blue/sky/cream palette and ENERGY 2 / RHYTHM 2 / MOTION 1.
+The active navigation surface joins the work canvas to locate the current module;
+cream marks its icon and the primary action. Large outer corners frame the workspace,
+24px introductions identify the task, and smaller controls remain easy to distinguish.
+Keep Segoe UI for readable native forms. Group actual workspace identity in the
+sidebar and make the reference's header search perform the existing knowledge search.
+The profile initials come from the signed-in account. Preserve all existing work
+areas and data; do not introduce dashboard metrics or decorative content cards.
+Dark mode keeps the existing tonal teal surfaces. On phones, the header wraps and
+navigation remains an accessible drawer. No images, new icon library or animation.
+
 WhatsApp settings retain ENERGY 2 / RHYTHM 2 / MOTION 1 and the existing studio
 palette, type and form controls. A password gate precedes connection settings;
 connection, allowed recipients and activation stay together before the reminder
