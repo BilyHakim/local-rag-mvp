@@ -25,6 +25,7 @@ class AccountEdit(BaseModel):
     display_name: str = Field(min_length=1, max_length=100)
     email: str = Field(default="", max_length=254)
     bio: str = Field(default="", max_length=1000)
+    default_model: str = Field(default="", max_length=200)
     enabled_features: list[Literal["assistant", "chat", "seo", "social"]] = Field(max_length=4)
 
     @field_validator("email")

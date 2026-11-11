@@ -85,7 +85,7 @@
     });
     if (qs('#assistantView').classList.contains('active')) input.focus({ preventScroll: true });
   });
-  qs('#assistantNew').addEventListener('click', () => { render(null); error(''); input.value = ''; input.focus(); });
+  qs('#assistantNew').addEventListener('click', () => { render(null); error(''); input.value = ''; if (state.account?.default_model) qs('#assistantModel').value = ''; input.focus(); });
   qs('#assistantRefresh').addEventListener('click', () => run(() => history()));
   function selectConversation(id) {
     run(async version => {

@@ -183,7 +183,7 @@ summary:hover { color: var(--accent); text-decoration: underline; text-underline
 }
 .workspace-form button { align-self: flex-start; }
 .field { display: grid; gap: 8px; margin-bottom: 20px; min-width: 0; }
-.field > span, .composer > label { color: var(--ink); font-size: 13px; font-weight: 600; }
+.field > span, .field > label, .composer > label { color: var(--ink); font-size: 13px; font-weight: 600; }
 .field em { color: var(--muted); font-size: 12px; font-style: normal; font-weight: 400; }
 .field input, .field textarea, .field select, .search-form input { width: 100%; padding: 12px 14px; color: var(--ink); background: var(--input); border: 1px solid var(--control-line); border-radius: 8px; font-size: 15px; line-height: 1.6; }
 .field textarea { min-height: 100px; resize: vertical; }

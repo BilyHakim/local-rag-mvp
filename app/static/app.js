@@ -8,6 +8,13 @@ const featureEnabled = view => view === 'whatsapp' ? (!state.account || (state.a
 function applyAccountProfile(profile) {
   const previous = state.account;
   state.account = profile; state.accountError = '';
+  if (!previous || previous.username !== profile.username || previous.default_model !== profile.default_model) {
+    ['llmModel', 'assistantModel', 'socialModel', 'campaignModel'].forEach(id => {
+      const select = qs('#' + id);
+      select.value = '';
+      select.options[0].textContent = profile.default_model ? `Default profil: ${profile.default_model}` : 'Default server';
+    });
+  }
   if (previous && (previous.username !== profile.username || previous.tenant !== profile.tenant)) document.dispatchEvent(new Event('rag-history-reset'));
   qs('#accessStatus').textContent = profile.display_name || profile.username || 'API key';
   qs('#accountInitials').textContent = (profile.display_name || profile.username || 'API').trim().split(/\s+/).slice(0, 2).map(word => word[0]).join('').toLocaleUpperCase();
@@ -296,6 +303,7 @@ questionInput.addEventListener('input', () => {
 qsa('[data-question]').forEach(button => button.addEventListener('click', () => ask(button.dataset.question)));
 qs('#newChatButton').addEventListener('click', () => {
   state.ragConversation = null;
+  if (state.account?.default_model) qs('#llmModel').value = '';
   document.dispatchEvent(new Event('rag-history-state'));
   qsa('.message', messages).forEach(message => message.remove());
   welcome.hidden = false;
@@ -395,17 +403,27 @@ async function loadModels(selectId = 'llmModel', refreshId = 'refreshModels', st
   try {
     const data = await api('/api/llm/models');
     if (version !== modelLoadVersions.get(selectId)) return;
-    select.replaceChildren(new Option(`Default server${data.default_model ? `: ${data.default_model}` : ''}`, ''));
+    const preferred = selectId === 'accountDefaultModel' ? '' : state.account?.default_model;
+    select.replaceChildren(new Option(preferred ? `Default profil: ${preferred}` : `Default server${data.default_model ? `: ${data.default_model}` : ''}`, ''));
     for (const model of data.models) select.add(new Option(model, model));
-    if (data.models.includes(previous)) select.value = previous;
+    if (selectId === 'accountDefaultModel') {
+      const saved = state.account?.default_model || '';
+      if (saved && !data.models.includes(saved)) select.add(new Option(`${saved} (tidak tersedia)`, saved));
+      select.value = saved;
+    } else if (data.models.includes(previous)) select.value = previous;
     select.disabled = !data.models.length;
     status.textContent = data.models.length
       ? (data.plan === 'goat' ? 'Filter paket CommandCode GOAT. Sisa kuota diperiksa saat mengirim.' : '')
       : (data.plan === 'goat' ? 'Tidak ada model GOAT yang cocok dengan katalog provider. Periksa konfigurasi paket.' : 'Daftar model kosong. Menggunakan model default server.');
+    if (preferred && !data.models.includes(preferred)) status.textContent = 'Model default profil tidak tersedia. Pilih model lain atau ubah Profil Saya.';
   } catch (error) {
     if (version !== modelLoadVersions.get(selectId)) return;
-    select.replaceChildren(new Option('Default server', ''));
-    status.textContent = `${error.message} Menggunakan model default server. Coba muat ulang model.`;
+    const preferred = selectId === 'accountDefaultModel' ? '' : state.account?.default_model;
+    select.replaceChildren(new Option(preferred ? `Default profil: ${preferred}` : 'Default server', ''));
+    if (selectId === 'accountDefaultModel' && state.account?.default_model) {
+      select.add(new Option(state.account.default_model, state.account.default_model, true, true));
+    }
+    status.textContent = `${error.message} Menggunakan model default ${preferred ? 'profil' : 'server'}. Coba muat ulang model.`;
   } finally {
     if (version === modelLoadVersions.get(selectId)) {
       refresh.disabled = false;

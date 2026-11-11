@@ -25,6 +25,7 @@ async def chat_models():
 
 async def select_model(model: str | None):
     from app.services.commandcode_plans import active_plan
+    model = model or chat_model_context.get()
     if model is not None or active_plan() == "goat":
         catalog = await list_chat_models()
         model = model or catalog["default_model"]

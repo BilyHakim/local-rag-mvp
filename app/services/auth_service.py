@@ -107,6 +107,7 @@ def account_profile(principal, editable=True):
     return {"username": username, "tenant": principal["tenant"], "role": principal["role"],
             "display_name": data.get("display_name", username), "email": data.get("email", ""),
             "bio": data.get("bio", ""), "enabled_features": [key for key in data.get("enabled_features", allowed) if key in allowed],
+            "default_model": data.get("default_model", ""),
             "available_features": allowed, "revision": revision, "editable": editable}
 
 

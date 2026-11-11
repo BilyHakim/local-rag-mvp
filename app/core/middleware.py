@@ -12,6 +12,7 @@ from app.core.config import settings
 from app.core.security import tenant_context
 from starlette.requests import Request
 from app.services import auth_service as auth
+from app.services.model_service import chat_model_context
 
 log = logging.getLogger("http")
 metrics = {"requests": 0, "errors": 0, "duration_ms": 0}
@@ -75,6 +76,7 @@ class SecurityMiddleware:
         if principal["role"] != "admin" and not own_conversation and path not in reader_paths | {"/api/auth/me", "/api/auth/login", "/api/auth/logout", "/api/account/profile", "/api/account/password"}:
             return await reject(403, "Akses admin diperlukan")
         feature = auth.feature_for_path(path)
+        profile = {}
         if session_auth and feature:
             profile = await asyncio.to_thread(auth.account_profile, principal)
             if feature not in profile["enabled_features"]:
@@ -95,6 +97,7 @@ class SecurityMiddleware:
             return await reject(503, "Server sibuk; coba lagi nanti", retry_after=15)
         self.inflight += 1
         identity = tenant_context.set(principal["tenant"])
+        model_preference = chat_model_context.set(profile.get("default_model") or None)
         status = 500
         response_started = False
 
@@ -152,6 +155,7 @@ class SecurityMiddleware:
         finally:
             self.inflight -= 1
             tenant_context.reset(identity)
+            chat_model_context.reset(model_preference)
             elapsed = int((time.monotonic() - started) * 1000)
             metrics["requests"] += 1
             metrics["errors"] += int(status >= 500)

@@ -1,6 +1,6 @@
 (() => {
   const form = qs('#accountForm'), passwordForm = qs('#accountPasswordForm');
-  let profile = null, busy = false;
+  let profile = null, busy = false, modelsLoading = false;
   const showError = message => { qs('#accountError').textContent = message; qs('#accountError').hidden = !message; if (message) qs('#accountError').scrollIntoView({ block: 'nearest' }); };
 
   function controls() {
@@ -9,6 +9,9 @@
       input.disabled = !editable || (input.name === 'enabled_features' && !profile.available_features.includes(input.value));
     });
     passwordForm.querySelectorAll('input, button').forEach(input => { input.disabled = !editable; });
+    qs('#accountDefaultModel').disabled = !editable || modelsLoading;
+    qs('#accountModelsRefresh').disabled = !editable || modelsLoading;
+    qs('#accountSave').disabled = !editable || modelsLoading;
     qs('#accountReload').disabled = busy;
     form.setAttribute('aria-busy', String(busy));
     passwordForm.setAttribute('aria-busy', String(busy));
@@ -20,13 +23,23 @@
       ['username', 'display_name', 'email', 'bio'].forEach(key => { form.elements[key].value = data[key] || ''; });
       form.elements.role.value = data.role === 'admin' ? 'Administrator' : 'Pembaca';
       form.querySelectorAll('[name="enabled_features"]').forEach(input => { input.checked = data.enabled_features.includes(input.value); });
+      qs('#accountDefaultModel').replaceChildren(new Option(data.default_model || 'Default server', data.default_model || ''));
       qs('#accountStatus').textContent = data.editable ? 'Perubahan disimpan untuk akun Anda dan tetap berlaku setelah login kembali.' : 'Login dengan akun workspace untuk mengedit profil dan password. Akses API key hanya dapat melihat informasi akun.';
     } else {
       qs('#accountStatus').textContent = 'Profil belum dapat dimuat. Klik Muat ulang profil untuk mencoba lagi.';
       showError(state.accountError || 'Periksa koneksi backend.');
     }
     controls();
+    if (data) refreshModels();
   }
+
+  async function refreshModels() {
+    if (modelsLoading) return;
+    modelsLoading = true; controls();
+    try { await loadModels('accountDefaultModel', 'accountModelsRefresh', 'accountModelStatus'); }
+    finally { modelsLoading = false; controls(); }
+  }
+  qs('#accountModelsRefresh').addEventListener('click', refreshModels);
 
   async function run(button, task) {
     if (busy) return;
@@ -46,6 +59,7 @@
       const fields = form.elements;
       const data = await api('/api/account/profile', { method: 'PUT', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ revision: profile.revision, display_name: fields.display_name.value, email: fields.email.value, bio: fields.bio.value,
+          default_model: fields.default_model.value,
           enabled_features: [...form.querySelectorAll('[name="enabled_features"]:checked')].map(input => input.value) }) });
       applyAccountProfile(data); render(data); showToast('Profil dan pilihan fitur disimpan.');
     });

@@ -1,5 +1,11 @@
 # Workspace design direction
 
+Profile model preference retains ENERGY 2 / RHYTHM 2 / MOTION 1 and the existing
+account form. One labelled native text-model select and reload action sit beside
+personal preferences, with a short explanation of account ownership and explicit
+model overrides. Existing theme input/option colors and 44px targets apply. Model
+loading/errors use the existing status region; no new assets or animation.
+
 Ruang Chat's compact composer keeps the teal studio surface, visible message label,
 and cream Send focal action, with ENERGY 2 / RHYTHM 2 / MOTION 1. A one-line
 editor grows with content up to a bounded scroll area. Model and icon-only refresh

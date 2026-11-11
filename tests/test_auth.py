@@ -1,4 +1,5 @@
 import time
+import asyncio
 
 import httpx
 import pytest
@@ -33,7 +34,7 @@ async def login(client, password="admin123", **kwargs):
 
 
 def edited_profile(profile, **changes):
-    return {**{key: profile[key] for key in ("revision", "display_name", "email", "bio", "enabled_features")}, **changes}
+    return {**{key: profile[key] for key in ("revision", "display_name", "email", "bio", "enabled_features", "default_model")}, **changes}
 
 
 async def test_account_profile_persists_with_revision_and_keeps_login_identity(client):
@@ -89,10 +90,60 @@ async def test_profile_validation_and_csrf_preserve_account(client):
     await login(client)
     profile = (await client.get('/api/account/profile')).json()
     assert (await client.put('/api/account/profile', json=edited_profile(profile))).status_code == 403
-    for change in ({'role':'admin'}, {'username':'other'}, {'email':'not email'}, {'display_name':' '}, {'enabled_features':['assistant','assistant']}):
+    for change in ({'role':'admin'}, {'username':'other'}, {'email':'not email'}, {'display_name':' '}, {'enabled_features':['assistant','assistant']}, {'default_model':'x' * 201}):
         result = await client.put('/api/account/profile', headers=HEADERS, json=edited_profile(profile, **change))
         assert result.status_code == 422
     assert (await client.get('/api/account/profile')).json()['revision'] == 0
+
+
+async def test_default_models_persist_per_account_and_isolate_requests(client, monkeypatch):
+    from app.api import chat
+    from app.services.model_service import chat_model_context
+
+    monkeypatch.setattr(settings, 'AI_CHAT_MODEL', 'server-model')
+    async def catalog():
+        return {'models': ['model-a', 'model-b'], 'default_model': 'server-model'}
+    async def rag(**kwargs):
+        await asyncio.sleep(0)
+        return {'answer': chat_model_context.get() or settings.AI_CHAT_MODEL, 'sources': []}
+    monkeypatch.setattr(chat, 'list_chat_models', catalog)
+    monkeypatch.setattr(chat, 'answer_with_rag', rag)
+    await login(client)
+    admin = (await client.get('/api/account/profile')).json()
+    assert admin['default_model'] == ''
+    saved = await client.put('/api/account/profile', headers=HEADERS, json=edited_profile(admin, default_model='model-a'))
+    assert saved.status_code == 200 and saved.json()['default_model'] == 'model-a'
+    with auth.connection() as db:
+        db.execute('INSERT INTO users VALUES (?,?,?,?)', ('reader', auth.password_hash('reader-password'), 'local', 'reader'))
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url='http://test') as reader:
+        await reader.post('/api/auth/login', headers=HEADERS, json={'username':'reader', 'password':'reader-password'})
+        profile = (await reader.get('/api/account/profile')).json()
+        assert profile['default_model'] == ''
+        result = await reader.put('/api/account/profile', headers=HEADERS, json=edited_profile(profile, default_model='model-b'))
+        assert result.status_code == 200
+        replies = await asyncio.gather(*[
+            account.post('/api/chat-rag', headers=HEADERS, json={'question':'Pertanyaan uji'})
+            for account in (client, reader)
+        ])
+        assert [reply.json()['answer'] for reply in replies] == ['model-a', 'model-b']
+        explicit = await client.post('/api/chat-rag', headers=HEADERS, json={'question':'Pertanyaan uji', 'model':'model-b'})
+        assert explicit.json()['answer'] == 'model-b'
+        assert (await reader.get('/api/account/profile')).json()['default_model'] == 'model-b'
+    await client.post('/api/auth/logout', headers=HEADERS)
+    await login(client)
+    admin = (await client.get('/api/account/profile')).json()
+    assert admin['default_model'] == 'model-a'
+    monkeypatch.setattr(settings, 'API_KEYS', {'service-key': {'username':'admin', 'tenant':'local', 'role':'admin'}})
+    service_reply = await client.post('/api/chat-rag', headers={'Authorization':'Bearer service-key'}, json={'question':'Pertanyaan uji'})
+    assert service_reply.json()['answer'] == 'server-model'
+    await client.put('/api/account/profile', headers=HEADERS, json=edited_profile(admin, default_model='retired-model'))
+    rejected = await client.post('/api/chat-rag', headers=HEADERS, json={'question':'Pertanyaan uji'})
+    assert rejected.status_code == 422
+    admin = (await client.get('/api/account/profile')).json()
+    await client.put('/api/account/profile', headers=HEADERS, json=edited_profile(admin, default_model=''))
+    fallback = await client.post('/api/chat-rag', headers=HEADERS, json={'question':'Pertanyaan uji'})
+    assert fallback.json()['answer'] == 'server-model'
+    assert chat_model_context.get() is None
 
 
 async def test_password_update_checks_current_hashes_new_and_revokes_other_sessions(client):

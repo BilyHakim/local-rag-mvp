@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="Workspace untuk knowledge perusahaan, audit SEO, dan produksi konten social media.">
   <title>Company AI Workspace</title>
-  <link rel="stylesheet" href="/static/styles.css?v=31">
+  <link rel="stylesheet" href="/static/styles.css?v=32">
 </head>
 <body>
   <a class="skip-link" href="#mainContent">Langsung ke area kerja</a>
@@ -208,6 +208,7 @@
             <label class="field"><span>Nama tampilan</span><input name="display_name" maxlength="100" autocomplete="nickname" required disabled></label>
             <label class="field"><span>Email kontak (opsional)</span><input name="email" type="email" maxlength="254" autocomplete="email" disabled></label>
             <label class="field"><span>Tentang saya (opsional)</span><textarea name="bio" maxlength="1000" rows="3" disabled></textarea></label>
+            <div class="field"><label for="accountDefaultModel">Model teks default</label><div class="model-controls"><select id="accountDefaultModel" name="default_model" aria-describedby="accountModelHint accountModelStatus" disabled><option value="">Default server</option></select><button class="composer-icon" id="accountModelsRefresh" type="button" aria-label="Muat ulang model profil" title="Muat ulang model"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5M6.1 7a7 7 0 0 1 11.6-2L20 8M4 16l2.3 3A7 7 0 0 0 17.9 17"/></svg></button></div><p class="empty-note" id="accountModelHint">Mengikuti akun ini untuk Ruang Chat, Knowledge/RAG, SEO, dan teks Social Media. Pilihan model manual tetap diutamakan. Kampanye yang sudah tersimpan memakai modelnya sendiri.</p><p class="model-status" id="accountModelStatus" role="status"></p></div>
             <fieldset class="account-features"><legend>Fitur yang aktif</legend><p class="empty-note">Pilih tab yang ingin Anda gunakan. Tab nonaktif disembunyikan dan aksesnya dinonaktifkan untuk akun ini. Profil Saya selalu tersedia.</p>
               <label class="account-feature"><input type="checkbox" name="enabled_features" value="assistant" disabled><span><strong>Ruang Chat</strong><small>Percakapan umum melalui CommandCode.</small></span></label>
               <label class="account-feature"><input type="checkbox" name="enabled_features" value="chat" disabled><span><strong>Knowledge / RAG</strong><small>Tanya jawab berdasarkan knowledge perusahaan.</small></span></label>
@@ -416,14 +417,14 @@
     </main>
   </div>
   <div class="toast" id="toast" role="status"></div>
-  <script src="/static/app.js?v=17"></script>
+  <script src="/static/app.js?v=18"></script>
   <script src="/static/workspace.js?v=8"></script>
   <script src="/static/vendor/markdown-it-15.0.3.min.js"></script>
   <script src="/static/markdown.js?v=1"></script>
   <script src="/static/chat-editor.js?v=1"></script>
-  <script src="/static/assistant.js?v=5"></script>
+  <script src="/static/assistant.js?v=6"></script>
   <script src="/static/rag-history.js?v=1"></script>
-  <script src="/static/account.js?v=1"></script>
+  <script src="/static/account.js?v=2"></script>
   <script src="/static/folder-upload.js?v=1"></script>
   <script src="/static/whatsapp.js?v=1"></script>
 </body>
