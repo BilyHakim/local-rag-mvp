@@ -1,5 +1,7 @@
 from unittest.mock import AsyncMock
 
+import pytest
+
 import app.services.rag_service as rag_service
 from app.services.rag_service import (
     FALLBACK_ANSWER,
@@ -19,7 +21,113 @@ from app.services.rag_service import (
     repair_context_dump,
     rerank_results,
     select_relevant_evidence,
+    split_questions,
 )
+
+
+@pytest.mark.parametrize("question, expected", [
+    ("Pembuka.\n1. Apa kode?\n2. Berapa garansi?", ["Pembuka.\nApa kode?", "Pembuka.\nBerapa garansi?"]),
+    ("1) Apa kode? 2) Berapa garansi?", ["Apa kode?", "Berapa garansi?"]),
+    ("Tentang Lentera:\n- Apa kode?\n- Berapa garansi?", ["Tentang Lentera:\nApa kode?", "Tentang Lentera:\nBerapa garansi?"]),
+    ("Apa kode? Berapa garansi?", ["Apa kode?", "Berapa garansi?"]),
+    ("Apa kode Lentera?", ["Apa kode Lentera?"]),
+    ("Jelaskan pasal 1. Tentang garansi.", ["Jelaskan pasal 1. Tentang garansi."]),
+])
+def test_split_questions(question, expected):
+    assert split_questions(question) == expected
+
+
+def test_numbered_answers_ignore_list_numbers_but_validate_fact_numbers():
+    sources = [
+        {"id": "profile", "text": "Kode verifikasi knowledge perusahaan adalah LENTERA-7429."},
+        {"id": "warranty", "text": "Lampu Sora memiliki garansi elektronik 6 bulan."},
+    ]
+    answer = "1. Kode verifikasi knowledge perusahaan adalah LENTERA-7429.\n2. Lampu Sora memiliki garansi elektronik 6 bulan."
+    assert is_answer_grounded(answer, sources)
+    assert [item["id"] for item in answer_sources("", answer, sources)] == ["profile", "warranty"]
+    assert not is_answer_grounded(answer.replace("6 bulan", "9 bulan"), sources)
+
+
+async def test_multiple_questions_retrieve_and_validate_independently(monkeypatch):
+    questions = ["Apa kode verifikasi?", "Berapa garansi elektronik Lampu Sora?", "Pesanan mana dibatalkan?", "Siapa direktur?"]
+    answers = ["Kode verifikasi adalah LENTERA-7429.", "Lampu Sora memiliki garansi elektronik 6 bulan.", "Pesanan ORD-005 untuk Kursi Aruna dibatalkan."]
+    records = [{"id": str(i), "score": 0.9, "text": answer} for i, answer in enumerate(answers)]
+    embed = AsyncMock(side_effect=lambda text: [questions.index(text)])
+    monkeypatch.setattr(rag_service.ollama_service, "embed", embed)
+    monkeypatch.setattr(rag_service.index_manifest, "versions", lambda: [])
+    monkeypatch.setattr(rag_service.index_manifest, "lexical", lambda *args: [])
+    monkeypatch.setattr(rag_service.qdrant_service, "search", lambda query_vector, **kwargs: records[query_vector[0]:query_vector[0] + 1])
+
+    async def chat(system_prompt, user_prompt, **kwargs):
+        if system_prompt == rag_service.EVIDENCE_SELECTOR_SYSTEM_PROMPT:
+            return "E1"
+        if system_prompt == rag_service.ANSWER_VERIFIER_SYSTEM_PROMPT:
+            return "PASS"
+        for question, answer in zip(questions, answers):
+            if question in user_prompt:
+                return answer
+        raise AssertionError(user_prompt)
+
+    monkeypatch.setattr(rag_service.ollama_service, "chat", chat)
+    result = await answer_with_rag("\n".join(f"{i}. {q}" for i, q in enumerate(questions, 1)), top_k=1)
+    assert result["answer"] == "\n\n".join(f"{i}. {a}" for i, a in enumerate([*answers, FALLBACK_ANSWER], 1))
+    assert result["status"] == "answered"
+    assert len(result["citations"]) == 3
+    assert [call.args[0] for call in embed.await_args_list] == questions
+
+
+async def test_multiple_questions_all_unknown_remain_insufficient(monkeypatch):
+    single = AsyncMock(return_value={"answer": FALLBACK_ANSWER, "sources": []})
+    monkeypatch.setattr(rag_service, "_answer_single_question", single)
+    result = await answer_with_rag("Apa direktur? Berapa gajinya?")
+    assert result["answer"] == FALLBACK_ANSWER
+    assert result["status"] == "insufficient_evidence"
+    assert result["citations"] == []
+
+
+async def test_multiple_answers_keep_evidence_from_shared_source(monkeypatch):
+    single = AsyncMock(side_effect=[
+        {"answer": "Fakta A.", "sources": [{"id": "shared", "text": "Fakta A. Fakta B.", "_context_text": "Fakta A."}]},
+        {"answer": "Fakta B.", "sources": [{"id": "shared", "text": "Fakta A. Fakta B.", "_context_text": "Fakta B."}]},
+    ])
+    monkeypatch.setattr(rag_service, "_answer_single_question", single)
+    result = await answer_with_rag("Apa A? Apa B?")
+    assert len(result["citations"]) == 1
+    assert result["citations"][0]["evidence_text"] == "Fakta A.\nFakta B."
+
+
+async def test_shared_preamble_is_removed_before_retrieval(monkeypatch):
+    questions = ["Apa kode verifikasi?", "Berapa garansi?", "Pesanan mana dibatalkan?", "Berapa harga meja?", "Siapa pendiri?"]
+    import json
+    chat = AsyncMock(return_value=json.dumps(questions))
+    single = AsyncMock(return_value={"answer": FALLBACK_ANSWER, "sources": []})
+    monkeypatch.setattr(rag_service.ollama_service, "chat", chat)
+    monkeypatch.setattr(rag_service, "_answer_single_question", single)
+    await answer_with_rag("Saya punya beberapa pertanyaan. Tolong dijawab dengan benar ya.\n" + "\n".join(f"* {q}" for q in questions))
+    assert [call.args[0] for call in single.await_args_list] == questions
+    chat.assert_awaited_once()
+
+
+async def test_standalone_questions_preserve_shared_subject(monkeypatch):
+    chat = AsyncMock(return_value='["Siapa pendiri perusahaan dalam konteks?", "Kapan perusahaan dalam konteks didirikan?"]')
+    monkeypatch.setattr(rag_service.ollama_service, "chat", chat)
+    result = await rag_service.standalone_questions(["Tentang perusahaan dalam konteks:\nSiapa pendiri?", "Tentang perusahaan dalam konteks:\nKapan didirikan?"])
+    assert "perusahaan dalam konteks" in result[1]
+    assert "Tentang perusahaan dalam konteks" in chat.await_args.kwargs["user_prompt"]
+
+
+@pytest.mark.parametrize("response", ['["hanya satu"]', '["", "kedua"]', '[{}, "kedua"]', '{}', 'bukan JSON'])
+async def test_invalid_question_rewrite_is_not_reported_as_missing_knowledge(monkeypatch, response):
+    monkeypatch.setattr(rag_service.ollama_service, "chat", AsyncMock(return_value=response))
+    with pytest.raises(rag_service.AIResponseError):
+        await rag_service.standalone_questions(["Apa A?", "Apa B?"])
+
+
+async def test_who_question_keeps_model_selected_founding_evidence(monkeypatch):
+    monkeypatch.setattr(rag_service.ollama_service, "chat", AsyncMock(return_value="E2"))
+    source = {"id": "profile", "text": "Perusahaan contoh adalah penyedia perlengkapan kerja. Didirikan pada 14 Februari 2021 oleh Mira Santosa."}
+    result = await select_relevant_evidence("Siapa pendiri perusahaan dan kapan didirikan?", [source])
+    assert "14 Februari 2021" in result[0]["_context_text"]
 
 
 def test_normalize_question_fixes_modbus_typo():
@@ -29,6 +137,20 @@ def test_normalize_question_fixes_modbus_typo():
 def test_extract_entity_codes_finds_fm01():
     codes = _extract_entity_codes("sensor FM01 modbus address")
     assert "FM01" in codes
+
+
+def test_entity_codes_include_hyphens_and_exclude_currency():
+    assert _extract_entity_codes("SKU MJ-202, pesanan ORD-005, harga Rp1.800.000") == {"MJ-202", "ORD-005"}
+
+
+@pytest.mark.parametrize("amount", ["Rp1.800.000", "Rp 1.800.000", "1,800,000", "1800000"])
+def test_grounding_matches_formatted_prices_to_raw_table_values(amount):
+    sources = [{"id": "catalog", "text": "sku: MJ-202; nama_produk: Meja Nara; harga_idr: 1800000; kategori: Meja kerja"}]
+    answer = f"Meja Nara dijual dengan harga {amount} dan memiliki SKU MJ-202."
+    assert is_answer_grounded(answer, sources)
+    assert answer_sources("Berapa harga Meja Nara dan SKU-nya?", answer, sources) == sources
+    assert not is_answer_grounded("Meja Nara dijual seharga Rp1.900.000 dengan SKU MJ-202.", sources)
+    assert not is_answer_grounded("Meja Nara dijual seharga Rp1.800.000 dengan SKU MJ-999.", sources)
 
 
 def test_merge_search_results_deduplicates_by_id():
