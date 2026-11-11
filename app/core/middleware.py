@@ -82,12 +82,12 @@ class SecurityMiddleware:
         rate_key = token or (principal["tenant"] + ":" + principal.get("username", "session"))
         if path == "/api/auth/login":
             rate_key = "login:" + (scope.get("client") or ("unknown", 0))[0]
-        elif path == "/api/account/password":
+        elif path in {"/api/account/password", "/api/whatsapp/password", "/api/whatsapp/unlock"}:
             rate_key = "password:" + principal["tenant"] + ":" + principal.get("username", "session")
         window = self.windows[rate_key]
         while window and window[0] <= now - 60:
             window.popleft()
-        if len(window) >= (10 if path in {"/api/auth/login", "/api/account/password"} else settings.RATE_LIMIT_PER_MINUTE):
+        if len(window) >= (10 if path in {"/api/auth/login", "/api/account/password", "/api/whatsapp/password", "/api/whatsapp/unlock"} else settings.RATE_LIMIT_PER_MINUTE):
             return await reject(429, "Batas request tercapai; coba lagi nanti", retry_after=max(1, int(60 - (now - window[0]))))
         window.append(now)
         if self.inflight >= 4:

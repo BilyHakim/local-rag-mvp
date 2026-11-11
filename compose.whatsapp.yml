@@ -1,0 +1,15 @@
+services:
+  waha:
+    image: ${WAHA_IMAGE:?Set a tested WAHA image tag in .env.waha}
+    environment:
+      WAHA_API_KEY: ${WAHA_API_KEY:?Set WAHA_API_KEY in .env.waha}
+      WAHA_DASHBOARD_USERNAME: ${WAHA_DASHBOARD_USERNAME:-admin}
+      WAHA_DASHBOARD_PASSWORD: ${WAHA_DASHBOARD_PASSWORD:?Set a dashboard password in .env.waha}
+    ports:
+      - "127.0.0.1:3000:3000"
+    volumes:
+      - waha_sessions:/app/.sessions
+    restart: unless-stopped
+
+volumes:
+  waha_sessions:

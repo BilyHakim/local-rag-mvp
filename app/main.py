@@ -22,6 +22,8 @@ from app.api.workspace import router as workspace_router, media_router
 from app.services.publishing_service import scheduler_loop
 from app.api.auth import router as auth_router
 from app.api.assistant import router as assistant_router
+from app.api.whatsapp import router as whatsapp_router, hooks as whatsapp_hooks
+from app.services.whatsapp_service import scheduler_loop as whatsapp_loop
 from app.services import auth_service
 from fastapi import Request
 from fastapi.responses import RedirectResponse
@@ -33,9 +35,13 @@ from fastapi.responses import JSONResponse
 async def lifespan(app):
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s")
     scheduler = asyncio.create_task(scheduler_loop()) if settings.SCHEDULER_ENABLED else None
+    whatsapp = asyncio.create_task(whatsapp_loop())
     try:
         yield
     finally:
+        whatsapp.cancel()
+        with suppress(asyncio.CancelledError):
+            await whatsapp
         if scheduler:
             scheduler.cancel()
             with suppress(asyncio.CancelledError):
@@ -56,6 +62,8 @@ app.include_router(workspace_router, prefix="/api", tags=["workspace"])
 app.include_router(media_router)
 app.include_router(auth_router)
 app.include_router(assistant_router, prefix="/api", tags=["assistant"])
+app.include_router(whatsapp_router)
+app.include_router(whatsapp_hooks)
 
 
 @app.exception_handler(AIProviderError)

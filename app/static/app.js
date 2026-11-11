@@ -3,7 +3,7 @@ const qsa = (selector, root = document) => [...root.querySelectorAll(selector)];
 
 const state = { busy: false, account: null, accountError: '', knowledgeUploadBusy: false };
 const accountFeatures = ['assistant', 'chat', 'seo', 'social'];
-const featureEnabled = view => !accountFeatures.includes(view) || !state.account || state.account.enabled_features.includes(view);
+const featureEnabled = view => view === 'whatsapp' ? (!state.account || (state.account.role === 'admin' && state.account.editable)) : !accountFeatures.includes(view) || !state.account || state.account.enabled_features.includes(view);
 
 function applyAccountProfile(profile) {
   const previous = state.account;
@@ -408,7 +408,7 @@ const workspaceReady = api('/api/account/profile').then(profile => {
   state.accountError = error.message;
   return api('/api/auth/me').then(user => { qs('#accessStatus').textContent = user.username || 'API key'; return null; }).catch(() => null);
 }).then(profile => {
-  const target = ['chat', 'assistant', 'knowledge', 'seo', 'social', 'brand', 'account'].includes(initialView) ? initialView : 'chat';
+  const target = ['chat', 'assistant', 'knowledge', 'seo', 'social', 'brand', 'account', 'whatsapp'].includes(initialView) ? initialView : 'chat';
   switchView(target, false, false);
   if (featureEnabled('chat')) loadModels();
   if (featureEnabled('social')) { loadSocialModels(); loadCampaignModels(); }

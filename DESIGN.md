@@ -1,5 +1,12 @@
 # Workspace design direction
 
+WhatsApp settings retain ENERGY 2 / RHYTHM 2 / MOTION 1 and the existing studio
+palette, type and form controls. A password gate precedes connection settings;
+connection, allowed recipients and activation stay together before the reminder
+form. A single column of message history shows actual delivery states and errors.
+The settings save button is the focal action; existing 44px controls and responsive
+field grids preserve keyboard and mobile use in both themes. No new assets.
+
 Folder ingestion retains ENERGY 2 / RHYTHM 2 / MOTION 1 and the studio theme.
 Put one full-width folder panel before the existing single-file and note forms,
 since folder selection is the new bulk workflow. A native progress bar and explicit

@@ -1,5 +1,9 @@
 # Local RAG MVP
 
+Asisten WhatsApp melalui WAHA mendukung reminder terjadwal dan jawaban dari
+knowledge untuk nomor yang diizinkan. Pengaturan memakai password tambahan:
+[panduan WhatsApp](docs/WHATSAPP.md).
+
 Sekarang tersedia tiga mode dalam satu aplikasi: **Knowledge / RAG**, **SEO
 Specialist**, dan **Social Media Specialist**. Profil perusahaan dan knowledge
 dipakai bersama. Social Media menyediakan chat/revisi, pembuatan gambar, serta
